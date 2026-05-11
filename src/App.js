@@ -29,31 +29,25 @@ const getMonday  = d => { const x=new Date(d),day=x.getDay(); x.setDate(x.getDat
 const addDays    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
 const fmtDate    = d => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 const fmtDateISO = d => { const x=new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`; };
-const parseISO   = s => { if(!s) return null; const [y,m,d]=s.split("-"); return new Date(y,m-1,d); };
 const getDIM     = (y,m) => new Date(y,m+1,0).getDate();
 const getFD      = (y,m) => new Date(y,m,1).getDay();
 const luminance  = h => { try { const r=parseInt(h.slice(1,3),16)/255,g=parseInt(h.slice(3,5),16)/255,b=parseInt(h.slice(5,7),16)/255; return 0.299*r+0.587*g+0.114*b; } catch(e){ return 0; } };
 const textOn     = bg => luminance(bg||"#fff")>0.5?"#1C1C1C":"#ffffff";
 const ensureHttp = url => url&&!url.startsWith("http")?`https://${url}`:url;
 
-// Check if a date string (YYYY-M-D) falls within a task range or recurrence
-const taskOccursOn = (task, dateStr) => {
-  if (!dateStr) return false;
-  // Range task
+// Check if a task occurs on a given fmtDate string
+const taskOccursOn = (task, dk) => {
+  if (!dk) return false;
+  if (task.is_recurring && task.recurrence_days && task.recurrence_days.length > 0) {
+    const parts = dk.split("-");
+    const d = new Date(parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]));
+    return task.recurrence_days.includes(WEEK_DAYS_FULL[d.getDay()]);
+  }
   if (task.end_date && task.date) {
-    const d = parseISO(dateStr.includes("-")&&dateStr.split("-").length===3&&dateStr.split("-")[1].length<=2 ? (() => { const [y,m,d]=dateStr.split("-"); return `${y}-${String(parseInt(m)+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`; })() : dateStr);
-    const start = parseISO(task.date.includes("-")&&task.date.split("-").length===3&&task.date.split("-")[1].length<=2 ? (() => { const [y,m,dd]=task.date.split("-"); return `${y}-${String(parseInt(m)+1).padStart(2,"0")}-${String(dd).padStart(2,"0")}`; })() : task.date);
-    const end   = parseISO(task.end_date);
-    if (d&&start&&end) return d>=start&&d<=end;
+    const toNum = s => { const p=s.split("-"); return new Date(parseInt(p[0]),parseInt(p[1]),parseInt(p[2])).getTime(); };
+    return toNum(dk) >= toNum(task.date) && toNum(dk) <= toNum(task.end_date.includes("T")?fmtDate(new Date(task.end_date)):task.end_date);
   }
-  // Recurring task
-  if (task.is_recurring && task.recurrence_days && task.recurrence_days.length>0) {
-    const d = new Date(...dateStr.split("-").map((v,i)=>i===1?parseInt(v):parseInt(v)));
-    const dayName = WEEK_DAYS_FULL[d.getDay()];
-    return task.recurrence_days.includes(dayName);
-  }
-  // Normal task
-  return task.date === dateStr;
+  return task.date === dk;
 };
 
 let _id = Date.now();
@@ -83,6 +77,7 @@ export default function App() {
   const [modal, setModal]               = useState(null);
   const [modalForm, setModalForm]       = useState(EMPTY_FORM);
   const [newClientName, setNewClientName] = useState("");
+  const [quickTitle, setQuickTitle]     = useState("");
   const [openGroups, setOpenGroups]     = useState({ pendiente:true, asignada:true, terminada:true });
   const [openClients, setOpenClients]   = useState({});
   const logoRef  = useRef();
@@ -93,30 +88,27 @@ export default function App() {
   const [calYears, setCalYears]     = useState({ animadores:today.getFullYear(), disenadores:today.getFullYear(), proveedores:today.getFullYear() });
   const [calMonths, setCalMonths]   = useState({ animadores:today.getMonth(), disenadores:today.getMonth(), proveedores:today.getMonth() });
 
-  // ── Fetch Colombian holidays ──
-  const fetchHolidays = useCallback(async (year) => {
-    if (holidays[year]) return;
-    try {
-      const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/CO`);
-      const data = await res.json();
-      const map = {};
-      data.forEach(h => { map[h.date] = h.localName||h.name; });
-      setHolidays(p => ({ ...p, [year]: map }));
-    } catch(e) { console.log("No se pudieron cargar festivos"); }
-  }, [holidays]);
-
+  // ── Holidays ──
   useEffect(() => {
+    const fetchHolidays = async (year) => {
+      try {
+        const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/CO`);
+        const data = await res.json();
+        const map = {};
+        data.forEach(h => { map[h.date] = h.localName || h.name; });
+        setHolidays(p => ({ ...p, [year]: map }));
+      } catch(e) {}
+    };
     fetchHolidays(today.getFullYear());
-    fetchHolidays(today.getFullYear()+1);
+    fetchHolidays(today.getFullYear() + 1);
   }, []);
 
   const isHoliday = (dateObj) => {
     const iso = fmtDateISO(dateObj);
-    const yr = dateObj.getFullYear();
-    return holidays[yr]?.[iso] || null;
+    return holidays[dateObj.getFullYear()]?.[iso] || null;
   };
 
-  // ── Load data ──
+  // ── Load ──
   useEffect(() => {
     async function load() {
       const [{ data:br },{ data:bo },{ data:me },{ data:ta },{ data:as },{ data:cl }] = await Promise.all([
@@ -155,7 +147,7 @@ export default function App() {
   }, [modal]);
 
   // ── Derived ──
-  const board        = boards.find(b=>b.id===boardId)||boards[0];
+  const board        = boards.find(b=>b.id===boardId) || boards[0];
   const boardMembers = members.filter(m=>m.board_id===boardId);
 
   const taskAssignees = useCallback((taskId) => {
@@ -163,20 +155,32 @@ export default function App() {
     return members.filter(m=>ids.includes(m.id));
   }, [assignments, members]);
 
+  // Get tasks assigned to a specific member
   const memberTasks = useCallback((memberId) => {
-    const ids = assignments.filter(a=>a.member_id===memberId).map(a=>a.task_id);
-    return tasks.filter(t=>ids.includes(t.id));
+    const assignedIds = assignments.filter(a=>a.member_id===memberId).map(a=>a.task_id);
+    return tasks.filter(t=>assignedIds.includes(t.id));
   }, [assignments, tasks]);
 
-  const allBoardTasks = useCallback(() => {
+  // Get ALL tasks that belong to current board (any member of this board is assigned)
+  const boardTasks = useCallback(() => {
     const memberIds = boardMembers.map(m=>m.id);
-    const ids = [...new Set(assignments.filter(a=>memberIds.includes(a.member_id)).map(a=>a.task_id))];
-    return tasks.filter(t=>ids.includes(t.id));
+    const assignedTaskIds = new Set(assignments.filter(a=>memberIds.includes(a.member_id)).map(a=>a.task_id));
+    return tasks.filter(t=>assignedTaskIds.has(t.id));
   }, [assignments, tasks, boardMembers]);
+
+  // All tasks regardless of board (for sidebar which shows all tasks in current board)
+  const allTasksForSidebar = useCallback(() => {
+    const memberIds = boardMembers.map(m=>m.id);
+    const assignedTaskIds = new Set(assignments.filter(a=>memberIds.includes(a.member_id)).map(a=>a.task_id));
+    // Also include unassigned tasks that belong to this board
+    const unassignedBoardTasks = tasks.filter(t=>t.board_id===boardId&&assignments.filter(a=>a.task_id===t.id).length===0);
+    const assignedBoardTasks = tasks.filter(t=>assignedTaskIds.has(t.id));
+    return [...new Map([...unassignedBoardTasks,...assignedBoardTasks].map(t=>[t.id,t])).values()];
+  }, [assignments, tasks, boardMembers, boardId]);
 
   const getMemberSchedule = (task, memberId) => {
     const s = (task.assignee_schedules||[]).find(s=>s.memberId===memberId);
-    return s || { date:task.date, hour:task.hour };
+    return s || { date: task.date, hour: task.hour };
   };
 
   const clientOf = id => clients.find(c=>c.id===id);
@@ -206,7 +210,7 @@ export default function App() {
       return { memberId:mid, date:found?.date||date||null, hour:found?.hour||hour||HOURS[0] };
     });
     await supabase.from("tasks").insert({
-      id, member_id:allAssignees[0]||"", board_id:boardId,
+      id, member_id:allAssignees[0]||null, board_id:boardId,
       title:rest.title||"Sin título", status:rest.status||"pendiente",
       link:rest.link||"", comments:rest.comments||"",
       client_id:rest.client_id||"", color:rest.color||"#E8623A",
@@ -218,9 +222,20 @@ export default function App() {
       recurrence_days:rest.recurrence_days||[],
       end_date:rest.end_date||null,
     });
-    if (allAssignees.length>0) {
+    if (allAssignees.length > 0) {
       await supabase.from("task_assignments").insert(allAssignees.map(mid=>({id:uid(),task_id:id,member_id:mid})));
     }
+  };
+
+  const quickAdd = async () => {
+    if (!quickTitle.trim()) return;
+    const id = uid();
+    await supabase.from("tasks").insert({
+      id, board_id:boardId, title:quickTitle.trim(), status:"pendiente",
+      color:"#E8623A", duration:1, reference_links:[], assignee_schedules:[],
+      is_recurring:false, recurrence_days:[],
+    });
+    setQuickTitle("");
   };
 
   const updateTask = async (id, patch) => {
@@ -229,10 +244,10 @@ export default function App() {
     const db = {};
     Object.keys(rest).forEach(k=>{ if(fm[k]) db[fm[k]]=rest[k]; });
     if (assigneeSchedules) db.assignee_schedules = assigneeSchedules;
-    if (Object.keys(db).length>0) await supabase.from("tasks").update(db).eq("id",id);
-    if (assignees) {
+    if (Object.keys(db).length > 0) await supabase.from("tasks").update(db).eq("id",id);
+    if (assignees !== undefined) {
       await supabase.from("task_assignments").delete().eq("task_id",id);
-      if (assignees.length>0) await supabase.from("task_assignments").insert(assignees.map(mid=>({id:uid(),task_id:id,member_id:mid})));
+      if (assignees.length > 0) await supabase.from("task_assignments").insert(assignees.map(mid=>({id:uid(),task_id:id,member_id:mid})));
     }
   };
 
@@ -244,16 +259,16 @@ export default function App() {
   const duplicateTask = async (task) => {
     const id = uid();
     const assigneeIds = assignments.filter(a=>a.task_id===task.id).map(a=>a.member_id);
-    const { id:_id2, created_at, ...rest } = task;
+    const { id:_x, created_at, ...rest } = task;
     await supabase.from("tasks").insert({ ...rest, id, title:`${task.title} (copia)` });
-    if (assigneeIds.length>0) await supabase.from("task_assignments").insert(assigneeIds.map(mid=>({id:uid(),task_id:id,member_id:mid})));
+    if (assigneeIds.length > 0) await supabase.from("task_assignments").insert(assigneeIds.map(mid=>({id:uid(),task_id:id,member_id:mid})));
     setModal(null);
   };
 
   const addMember = async (bId) => {
-    const bm=members.filter(m=>m.board_id===bId);
-    const colors=["#E8623A","#3A6FE8","#7B6BE0","#3A9E8A","#C49A3C","#E06B9A"];
-    const b=boards.find(x=>x.id===bId);
+    const bm = members.filter(m=>m.board_id===bId);
+    const colors = ["#E8623A","#3A6FE8","#7B6BE0","#3A9E8A","#C49A3C","#E06B9A"];
+    const b = boards.find(x=>x.id===bId);
     await supabase.from("members").insert({id:uid(),board_id:bId,name:`${b?.label||""} ${bm.length+1}`,color:colors[bm.length%colors.length],position:bm.length});
   };
   const updateMember = async (id,patch) => supabase.from("members").update(patch).eq("id",id);
@@ -268,22 +283,22 @@ export default function App() {
   const deleteClient = async id => supabase.from("clients").delete().eq("id",id);
   const updateBoard  = async (id,patch) => supabase.from("boards").update(patch).eq("id",id);
   const saveBrand = async b => {
-    const {data}=await supabase.from("brand").select("id").single();
+    const {data} = await supabase.from("brand").select("id").single();
     await supabase.from("brand").update({name:b.name,logo:b.logo,nav_bg:b.navBg,sidebar_bg:b.sidebarBg,topbar_bg:b.topbarBg,accent:b.accent}).eq("id",data.id);
   };
 
   // ── Modal ──
   const openAdd = (memberId, date, hour) => {
     setModal({mode:"add",memberId,date,hour});
-    const schedules = memberId?[{memberId,date:date||"",hour:hour||HOURS[0]}]:[];
+    const schedules = memberId ? [{memberId,date:date||"",hour:hour||HOURS[0]}] : [];
     setModalForm({...EMPTY_FORM,assignees:memberId?[memberId]:[],assigneeSchedules:schedules,date:date||"",hour:hour||HOURS[0]});
   };
 
   const openEdit = task => {
     const assigneeIds = assignments.filter(a=>a.task_id===task.id).map(a=>a.member_id);
     const schedules = assigneeIds.map(mid => {
-      const found=(task.assignee_schedules||[]).find(s=>s.memberId===mid);
-      return {memberId:mid,date:found?.date||task.date||"",hour:found?.hour||task.hour||HOURS[0]};
+      const found = (task.assignee_schedules||[]).find(s=>s.memberId===mid);
+      return {memberId:mid, date:found?.date||task.date||"", hour:found?.hour||task.hour||HOURS[0]};
     });
     setModal({mode:"edit",task});
     setModalForm({
@@ -301,19 +316,23 @@ export default function App() {
 
   const saveModal = async () => {
     if (!modalForm.title.trim()) return;
-    if (modal.mode==="add") await addTask(modalForm, modal.memberId, modalForm.date, modalForm.hour);
-    else await updateTask(modal.task.id, {
-      title:modalForm.title, link:modalForm.link, status:modalForm.status,
-      comments:modalForm.comments, client_id:modalForm.client_id,
-      color:modalForm.color, duration:modalForm.duration,
-      reference_links:modalForm.reference_links, assignees:modalForm.assignees,
-      assigneeSchedules:modalForm.assigneeSchedules,
-      date:modalForm.is_recurring?null:(modalForm.assigneeSchedules[0]?.date||modalForm.date),
-      hour:modalForm.assigneeSchedules[0]?.hour||modalForm.hour,
-      end_date:modalForm.end_date||null,
-      is_recurring:modalForm.is_recurring,
-      recurrence_days:modalForm.recurrence_days,
-    });
+    if (modal.mode==="add") {
+      await addTask(modalForm, modal.memberId, modalForm.date, modalForm.hour);
+    } else {
+      await updateTask(modal.task.id, {
+        title:modalForm.title, link:modalForm.link, status:modalForm.status,
+        comments:modalForm.comments, client_id:modalForm.client_id,
+        color:modalForm.color, duration:modalForm.duration,
+        reference_links:modalForm.reference_links,
+        assignees:modalForm.assignees,
+        assigneeSchedules:modalForm.assigneeSchedules,
+        date:modalForm.is_recurring?null:(modalForm.assigneeSchedules[0]?.date||modalForm.date||null),
+        hour:modalForm.assigneeSchedules[0]?.hour||modalForm.hour,
+        end_date:modalForm.end_date||null,
+        is_recurring:modalForm.is_recurring,
+        recurrence_days:modalForm.recurrence_days,
+      });
+    }
     setModal(null);
   };
 
@@ -321,8 +340,8 @@ export default function App() {
 
   const toggleAssignee = (mid) => {
     const sel = modalForm.assignees.includes(mid);
-    const newA = sel?modalForm.assignees.filter(id=>id!==mid):[...modalForm.assignees,mid];
-    const newS = sel?modalForm.assigneeSchedules.filter(s=>s.memberId!==mid):[...modalForm.assigneeSchedules,{memberId:mid,date:modalForm.date||"",hour:modalForm.hour||HOURS[0]}];
+    const newA = sel ? modalForm.assignees.filter(id=>id!==mid) : [...modalForm.assignees,mid];
+    const newS = sel ? modalForm.assigneeSchedules.filter(s=>s.memberId!==mid) : [...modalForm.assigneeSchedules,{memberId:mid,date:modalForm.date||"",hour:modalForm.hour||HOURS[0]}];
     setModalForm(p=>({...p,assignees:newA,assigneeSchedules:newS}));
   };
 
@@ -332,8 +351,7 @@ export default function App() {
 
   const toggleRecurrenceDay = (day) => {
     const days = modalForm.recurrence_days||[];
-    const newDays = days.includes(day)?days.filter(d=>d!==day):[...days,day];
-    setField("recurrence_days",newDays);
+    setField("recurrence_days", days.includes(day)?days.filter(d=>d!==day):[...days,day]);
   };
 
   // ── Drag ──
@@ -344,14 +362,17 @@ export default function App() {
     if (!dragTask.current) return;
     const t = dragTask.current.task;
     const assigneeIds = assignments.filter(a=>a.task_id===t.id).map(a=>a.member_id);
-    const newAssignees = assigneeIds.includes(memberId)?assigneeIds:[...assigneeIds.filter(id=>{const m=memberOf(id);return m&&m.board_id!==board?.id;}),memberId];
-    const newSchedules = newAssignees.map(mid=>{
+    const boardMemberIds = boardMembers.map(m=>m.id);
+    // Replace board members in assignees with the dropped member, keep cross-board members
+    const crossBoardAssignees = assigneeIds.filter(id=>!boardMemberIds.includes(id));
+    const newAssignees = [...crossBoardAssignees, memberId];
+    const newSchedules = newAssignees.map(mid => {
       if (mid===memberId) return {memberId,date,hour};
-      const found=(t.assignee_schedules||[]).find(s=>s.memberId===mid);
-      return found||{memberId:mid,date:t.date,hour:t.hour};
+      const found = (t.assignee_schedules||[]).find(s=>s.memberId===mid);
+      return found || {memberId:mid,date:t.date,hour:t.hour};
     });
-    await updateTask(t.id,{date,hour,memberId,assignees:newAssignees,assigneeSchedules:newSchedules});
-    dragTask.current=null;
+    await updateTask(t.id, {date,hour,memberId,assignees:newAssignees,assigneeSchedules:newSchedules});
+    dragTask.current = null;
   };
 
   const handleLogoUpload = e => {
@@ -372,14 +393,14 @@ export default function App() {
 
   // ── Sidebar Tasks ──
   const SidebarTasks = () => {
-    const allT = allBoardTasks();
-    const filtered = filterClient?allT.filter(t=>t.client_id===filterClient):allT;
+    const allT = allTasksForSidebar();
+    const filtered = filterClient ? allT.filter(t=>t.client_id===filterClient) : allT;
     return (
       <div style={{flex:1,overflowY:"auto",padding:"0.5rem"}}>
         {STATUSES.map(st=>{
-          const stTasks=filtered.filter(t=>t.status===st.value);
-          const isOpen=openGroups[st.value];
-          const byClient={};
+          const stTasks = filtered.filter(t=>t.status===st.value);
+          const isOpen  = openGroups[st.value];
+          const byClient = {};
           stTasks.forEach(t=>{ const k=t.client_id||"sin-cliente"; if(!byClient[k]) byClient[k]=[]; byClient[k].push(t); });
           return (
             <div key={st.value} style={{marginBottom:6}}>
@@ -390,9 +411,9 @@ export default function App() {
                 <span style={{fontSize:10,color:"#555",marginLeft:"auto"}}>{stTasks.length}</span>
                 <span style={{fontSize:10,color:"#555"}}>{isOpen?"▾":"▸"}</span>
               </button>
-              {isOpen&&Object.entries(byClient).map(([cKey,cTasks])=>{
-                const cl=cKey==="sin-cliente"?null:clientOf(cKey);
-                const isClientOpen=openClients[`${st.value}-${cKey}`]!==false;
+              {isOpen && Object.entries(byClient).map(([cKey,cTasks])=>{
+                const cl = cKey==="sin-cliente" ? null : clientOf(cKey);
+                const isClientOpen = openClients[`${st.value}-${cKey}`] !== false;
                 return (
                   <div key={cKey} style={{marginLeft:8,marginBottom:2}}>
                     <button onClick={()=>setOpenClients(p=>({...p,[`${st.value}-${cKey}`]:!isClientOpen}))}
@@ -401,18 +422,20 @@ export default function App() {
                       <span style={{fontSize:10,color:cl?cl.color:"#555",fontWeight:500}}>{cl?cl.name:"Sin cliente"}</span>
                       <span style={{fontSize:9,color:"#444",marginLeft:"auto"}}>{cTasks.length} {isClientOpen?"▾":"▸"}</span>
                     </button>
-                    {isClientOpen&&cTasks.map(t=>{
-                      const assignees=taskAssignees(t.id);
+                    {isClientOpen && cTasks.map(t=>{
+                      const assignees = taskAssignees(t.id);
                       return (
                         <div key={t.id} onDoubleClick={()=>openEdit(t)}
-                          style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 6px",margin:"2px 0",background:"#252525",border:`1px solid ${t.color}33`,borderLeft:`3px solid ${t.color||"#444"}`,borderRadius:"0 6px 6px 0",cursor:"pointer"}}>
+                          style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 6px",margin:"2px 0",background:"#252525",border:`1px solid ${t.color||"#444"}33`,borderLeft:`3px solid ${t.color||"#444"}`,borderRadius:"0 6px 6px 0",cursor:"pointer"}}>
                           <div style={{flex:1,minWidth:0}}>
                             <p style={{fontSize:11,color:t.status==="terminada"?"#555":"#ddd",margin:0,lineHeight:1.3,textDecoration:t.status==="terminada"?"line-through":"none",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title}</p>
-                            {t.is_recurring&&<span style={{fontSize:9,color:"#58A6FF",background:"#58A6FF22",borderRadius:10,padding:"1px 5px"}}>🔁 Recurrente</span>}
-                            {t.end_date&&<span style={{fontSize:9,color:"#C49A3C",background:"#C49A3C22",borderRadius:10,padding:"1px 5px",marginLeft:3}}>📅 Rango</span>}
-                            {assignees.length>0&&<div style={{display:"flex",gap:2,marginTop:3,flexWrap:"wrap"}}>
-                              {assignees.map(m=><span key={m.id} style={{fontSize:9,background:m.color+"33",color:m.color,borderRadius:10,padding:"1px 5px"}}>{m.name}</span>)}
-                            </div>}
+                            {t.is_recurring&&<span style={{fontSize:9,color:"#58A6FF",background:"#58A6FF22",borderRadius:10,padding:"1px 5px"}}>↻ Recurrente</span>}
+                            {t.end_date&&!t.is_recurring&&<span style={{fontSize:9,color:"#C49A3C",background:"#C49A3C22",borderRadius:10,padding:"1px 5px",marginLeft:3}}>↔ Rango</span>}
+                            {assignees.length>0&&(
+                              <div style={{display:"flex",gap:2,marginTop:3,flexWrap:"wrap"}}>
+                                {assignees.map(m=><span key={m.id} style={{fontSize:9,background:m.color+"33",color:m.color,borderRadius:10,padding:"1px 5px"}}>{m.name}</span>)}
+                              </div>
+                            )}
                           </div>
                           <button onClick={e=>{e.stopPropagation();openEdit(t);}} style={{background:"none",border:"none",color:"#555",fontSize:11,cursor:"pointer",padding:0,flexShrink:0}}>✎</button>
                         </div>
@@ -430,16 +453,16 @@ export default function App() {
   };
 
   // ── Task Block ──
-  const TaskBlock = ({ t, memberId }) => {
-    const cl=clientOf(t.client_id);
-    const dur=t.duration||1;
-    const height=dur*HOUR_H-4;
-    const isRecurring=t.is_recurring;
-    const isRange=!!t.end_date;
+  const TaskBlock = ({ t }) => {
+    const cl  = clientOf(t.client_id);
+    const dur = t.duration||1;
+    const h   = dur*HOUR_H-4;
     return (
       <div draggable onDragStart={e=>onCalDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
-        style={{position:"absolute",left:2,right:2,top:2,height,background:t.color||"#E8623A",borderRadius:6,padding:"3px 6px",cursor:"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
-        <p style={{fontSize:10,fontWeight:600,color:textOn(t.color||"#E8623A"),margin:0,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}{isRecurring?" 🔁":""}{isRange?" 📅":""}</p>
+        style={{position:"absolute",left:2,right:2,top:2,height:h,background:t.color||"#E8623A",borderRadius:6,padding:"3px 6px",cursor:"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+        <p style={{fontSize:10,fontWeight:600,color:textOn(t.color||"#E8623A"),margin:0,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          {t.title}{t.is_recurring?" ↻":""}{t.end_date?" ↔":""}
+        </p>
         {cl&&<p style={{fontSize:9,color:textOn(t.color||"#E8623A"),opacity:0.8,margin:0}}>{cl.name}</p>}
         {dur>1&&<p style={{fontSize:9,color:textOn(t.color||"#E8623A"),opacity:0.7,margin:0}}>{dur}h</p>}
       </div>
@@ -576,11 +599,13 @@ export default function App() {
 
   // ── Task Modal ──
   const renderModal = () => {
-    const isEdit=modal.mode==="edit";
-    const refLinks=modalForm.reference_links||[];
+    const isEdit  = modal.mode==="edit";
+    const refLinks = modalForm.reference_links||[];
+    const taskType = modalForm.is_recurring?"recurring":modalForm.end_date?"range":"normal";
     return (
       <div onClick={()=>setModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,backdropFilter:"blur(3px)"}}>
         <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,padding:"1.75rem",width:520,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+
           {/* Header + color */}
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:"1rem"}}>
             <div style={{width:14,height:14,borderRadius:"50%",background:modalForm.color,flexShrink:0}}/>
@@ -613,8 +638,8 @@ export default function App() {
           <label style={lbS}>Asignar a</label>
           <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
             {members.map(m=>{
-              const sel=modalForm.assignees.includes(m.id);
-              const brd=boards.find(b=>b.id===m.board_id);
+              const sel = modalForm.assignees.includes(m.id);
+              const brd = boards.find(b=>b.id===m.board_id);
               return (
                 <button key={m.id} onClick={()=>toggleAssignee(m.id)}
                   style={{display:"flex",alignItems:"center",gap:5,background:sel?m.color:"#F4F2EE",border:`1.5px solid ${sel?m.color:"transparent"}`,borderRadius:20,padding:"4px 10px",cursor:"pointer"}}>
@@ -656,7 +681,7 @@ export default function App() {
           <label style={lbS}>Tipo de tarea</label>
           <div style={{display:"flex",gap:8,marginBottom:"1.1rem"}}>
             {[["normal","Normal","—"],["recurring","Recurrente","↻"],["range","Rango de fechas","↔"]].map(([type,label,icon])=>{
-              const active = type==="recurring"?modalForm.is_recurring:type==="range"?!!modalForm.end_date&&!modalForm.is_recurring:!modalForm.is_recurring&&!modalForm.end_date;
+              const active = taskType===type;
               return (
                 <button key={type} onClick={()=>{
                   if(type==="recurring") setModalForm(p=>({...p,is_recurring:true,end_date:""}));
@@ -692,7 +717,7 @@ export default function App() {
             </div>
           )}
 
-          {/* Rango de fechas */}
+          {/* Fechas */}
           {!modalForm.is_recurring&&(
             <div style={{display:"flex",gap:12,marginBottom:"1.1rem"}}>
               <div style={{flex:1}}>
@@ -700,16 +725,14 @@ export default function App() {
                 <input type="date" value={modalForm.date||""} onChange={e=>setField("date",e.target.value)}
                   style={{...inS,borderBottomColor:"#E8E4DE",fontSize:13}}/>
               </div>
-              {modalForm.end_date!==undefined&&(
-                <div style={{flex:1}}>
-                  <label style={lbS}>Fecha fin {!modalForm.end_date&&<span style={{color:"#bbb"}}>(opcional)</span>}</label>
-                  <input type="date" value={modalForm.end_date||""} onChange={e=>setField("end_date",e.target.value)}
-                    style={{...inS,borderBottomColor:modalForm.end_date?"#E8E4DE":"#E8E4DE",fontSize:13}}/>
-                </div>
-              )}
+              <div style={{flex:1}}>
+                <label style={lbS}>Fecha fin <span style={{color:"#bbb",fontWeight:400}}>(opcional)</span></label>
+                <input type="date" value={modalForm.end_date||""} onChange={e=>setField("end_date",e.target.value)}
+                  style={{...inS,borderBottomColor:"#E8E4DE",fontSize:13}}/>
+              </div>
               {!modalForm.end_date&&(
                 <div style={{flex:1}}>
-                  <label style={lbS}>Hora inicio</label>
+                  <label style={lbS}>Hora</label>
                   <select value={modalForm.hour||HOURS[0]} onChange={e=>setField("hour",e.target.value)}
                     style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer"}}>
                     {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
@@ -747,7 +770,7 @@ export default function App() {
           <textarea value={modalForm.comments} onChange={e=>setField("comments",e.target.value)} placeholder="Instrucciones para el equipo..."
             style={{width:"100%",border:"1px solid #E8E4DE",borderRadius:10,padding:"10px 12px",fontSize:13,outline:"none",background:"#FAFAF9",color:"#1C1C1C",resize:"vertical",minHeight:80,fontFamily:"'DM Sans',sans-serif",marginBottom:"1.1rem",boxSizing:"border-box"}}/>
 
-          {/* Links de referencia */}
+          {/* Links referencia */}
           <label style={lbS}>Links de referencia</label>
           {refLinks.map((rl,i)=>(
             <div key={i} style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
@@ -766,7 +789,7 @@ export default function App() {
 
           {/* Link entregable */}
           <label style={lbS}>Link de entregable <span style={{color:"#bbb",fontWeight:400}}>(opcional)</span></label>
-          <div style={{position:"relative",marginBottom:"1.5rem",display:"flex",alignItems:"center",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:"1.5rem"}}>
             <input value={modalForm.link} onChange={e=>setField("link",e.target.value)} placeholder="https://..."
               style={{...inS,borderBottomColor:"#E8E4DE",flex:1}}/>
             {modalForm.link&&<a href={ensureHttp(modalForm.link)} target="_blank" rel="noreferrer" style={{fontSize:18,color:"#3A6FE8",textDecoration:"none",flexShrink:0}}>↗</a>}
@@ -788,6 +811,7 @@ export default function App() {
     );
   };
 
+  // ── Main render ──
   return (
     <div style={{display:"flex",height:"100vh",background:"#F4F2EE",fontFamily:"'DM Sans',sans-serif",overflow:"hidden"}}>
       {/* Left nav */}
@@ -839,25 +863,13 @@ export default function App() {
           <div style={{padding:"0.5rem 1rem",borderTop:"1px solid #2a2a2a",display:"flex",flexDirection:"column",gap:6}}>
             {/* Quick add */}
             <div style={{display:"flex",gap:6}}>
-              <input
-                id="quick-add-input"
+              <input value={quickTitle} onChange={e=>setQuickTitle(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&quickAdd()}
                 placeholder="Tarea rápida..."
-                onKeyDown={async e=>{
-                  if(e.key==="Enter"&&e.target.value.trim()){
-                    await addTask({...EMPTY_FORM,title:e.target.value.trim()},null,null,null);
-                    e.target.value="";
-                  }
-                }}
                 style={{flex:1,background:"#2a2a2a",border:"none",borderRadius:8,color:"#F4F2EE",fontSize:11,padding:"6px 8px",outline:"none"}}/>
-              <button onClick={async()=>{
-                const inp=document.getElementById("quick-add-input");
-                if(inp&&inp.value.trim()){
-                  await addTask({...EMPTY_FORM,title:inp.value.trim()},null,null,null);
-                  inp.value="";
-                }
-              }} style={{background:brand.accent,border:"none",borderRadius:8,color:textOn(brand.accent),fontSize:16,cursor:"pointer",width:28,fontWeight:700}}>+</button>
+              <button onClick={quickAdd} style={{background:brand.accent,border:"none",borderRadius:8,color:textOn(brand.accent),fontSize:16,cursor:"pointer",width:28,fontWeight:700}}>+</button>
             </div>
-            {/* Full panel button */}
+            {/* Full modal */}
             <button onClick={()=>openAdd(null,null,null)} style={{width:"100%",background:"transparent",border:`1px solid ${brand.accent}55`,borderRadius:8,color:brand.accent,fontSize:11,cursor:"pointer",padding:"6px",fontWeight:500}}>
               + Nueva tarea completa
             </button>
@@ -909,12 +921,12 @@ export default function App() {
             <button onClick={()=>setSettingsOpen(true)} style={{...iBtnS,background:brand.accent+"18",borderRadius:8,border:`1px solid ${brand.accent}55`,color:brand.accent,fontSize:12,padding:"4px 10px",fontWeight:500}}>⚙ Personalizar</button>
           </div>
 
-          {/* Weekly */}
+          {/* Weekly view */}
           {view==="weekly"&&(
             <div style={{flex:1,overflowY:"auto",padding:"1rem"}}>
               {boardMembers.map(m=>{
-                const mTasks=memberTasks(m.id).filter(t=>filterClient?t.client_id===filterClient:true);
-                const wc=mTasks.filter(t=>weekDates.some(d=>taskOccursOn(t,fmtDate(d)))).length;
+                const mTasks = memberTasks(m.id).filter(t=>filterClient?t.client_id===filterClient:true);
+                const wc = mTasks.filter(t=>weekDates.some(d=>taskOccursOn(t,fmtDate(d)))).length;
                 return (
                   <div key={m.id} style={{marginBottom:"1.5rem"}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"0 4px"}}>
@@ -925,15 +937,15 @@ export default function App() {
                       <span style={{fontSize:11,color:"#bbb"}}>{wc} tarea{wc!==1?"s":""} esta semana</span>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"52px repeat(5,1fr)",border:"1px solid #E8E4DE",borderRadius:12,overflow:"hidden",background:"#fff"}}>
-                      <div style={{padding:"5px 6px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#FAFAF9",fontSize:10}}/>
+                      <div style={{padding:"5px 6px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#FAFAF9"}}/>
                       {weekDates.map((d,i)=>{
-                        const isT=fmtDate(d)===fmtDate(today);
-                        const hol=isHoliday(d);
+                        const isT = fmtDate(d)===fmtDate(today);
+                        const hol = isHoliday(d);
                         return (
-                          <div key={i} style={{padding:"5px 6px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:hol?"#FFF0F0":isT?m.color+"15":"#FAFAF9",borderLeft:"1px solid #E8E4DE",fontSize:10}}>
+                          <div key={i} style={{padding:"5px 6px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:hol?"#FFF0F5":isT?m.color+"15":"#FAFAF9",borderLeft:"1px solid #E8E4DE"}}>
                             <span style={{fontSize:9,color:hol?"#E06B9A":"#bbb"}}>{WEEK_DAYS[i]}</span>
                             <span style={{fontSize:13,color:hol?"#E06B9A":isT?m.color:"#1C1C1C",fontWeight:isT?700:400}}>{d.getDate()}</span>
-                            {hol&&<span style={{fontSize:7,color:"#E06B9A",textAlign:"center",lineHeight:1.1,maxWidth:50,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={hol}>🇨🇴</span>}
+                            {hol&&<span style={{fontSize:8}} title={hol}>🇨🇴</span>}
                           </div>
                         );
                       })}
@@ -941,16 +953,12 @@ export default function App() {
                         <>
                           <div key={hour+"L"} style={{height:HOUR_H,padding:"5px 4px",fontSize:9,color:"#ccc",textAlign:"right",borderTop:"1px solid #F0EDE8",background:"#FAFAF9",display:"flex",alignItems:"flex-start",justifyContent:"flex-end"}}>{hour}</div>
                           {weekDates.map((d,di)=>{
-                            const dk=fmtDate(d);
-                            const ck=`${m.id}-${dk}-${hour}`;
-                            const ct=mTasks.filter(t=>{
-                              if (t.is_recurring) {
-                                const dayName=WEEK_DAYS_FULL[d.getDay()];
-                                return (t.recurrence_days||[]).includes(dayName)&&(t.hour||HOURS[0])===hour;
-                              }
-                              const sch=getMemberSchedule(t,m.id);
-                              if (t.end_date&&t.date) return taskOccursOn(t,dk)&&(t.hour||HOURS[0])===hour;
-                              return sch.date===dk&&sch.hour===hour;
+                            const dk = fmtDate(d);
+                            const ct = mTasks.filter(t=>{
+                              const sch = getMemberSchedule(t,m.id);
+                              const taskHour = t.is_recurring ? t.hour : sch.hour;
+                              if (taskHour !== hour) return false;
+                              return taskOccursOn(t, dk);
                             });
                             return (
                               <div key={di}
@@ -958,7 +966,7 @@ export default function App() {
                                 onDrop={e=>onCalDrop(e,m.id,dk,hour)}
                                 onClick={()=>ct.length===0&&openAdd(m.id,dk,hour)}
                                 style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:ct.length===0?"pointer":"default"}}>
-                                {ct.map(t=><TaskBlock key={t.id} t={t} memberId={m.id}/>)}
+                                {ct.map(t=><TaskBlock key={t.id} t={t}/>)}
                               </div>
                             );
                           })}
@@ -971,18 +979,18 @@ export default function App() {
             </div>
           )}
 
-          {/* Monthly */}
+          {/* Monthly view */}
           {view==="monthly"&&(
             <div style={{flex:1,overflowY:"auto",padding:"1rem"}}>
               {(()=>{
-                const dim=getDIM(cYear,cMonth),fd=getFD(cYear,cMonth);
+                const dim=getDIM(cYear,cMonth), fd=getFD(cYear,cMonth);
                 const cells=[];
                 for(let i=0;i<fd;i++) cells.push(null);
                 for(let d=1;d<=dim;d++) cells.push(d);
                 while(cells.length%7!==0) cells.push(null);
                 const weeks=[];
                 for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7));
-                const allT=allBoardTasks().filter(t=>filterClient?t.client_id===filterClient:true);
+                const allT = boardTasks().filter(t=>filterClient?t.client_id===filterClient:true);
                 return (
                   <div style={{minWidth:700}}>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
@@ -991,11 +999,11 @@ export default function App() {
                     {weeks.map((week,wi)=>(
                       <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
                         {week.map((day,di)=>{
-                          const isT=day&&day===today.getDate()&&cMonth===today.getMonth()&&cYear===today.getFullYear();
-                          const dateObj=day?new Date(cYear,cMonth,day):null;
-                          const hol=dateObj?isHoliday(dateObj):null;
-                          const dk=day?fmtDate(new Date(cYear,cMonth,day)):null;
-                          const dt=day?allT.filter(t=>taskOccursOn(t,dk)):[];
+                          const isT = day&&day===today.getDate()&&cMonth===today.getMonth()&&cYear===today.getFullYear();
+                          const dateObj = day ? new Date(cYear,cMonth,day) : null;
+                          const hol = dateObj ? isHoliday(dateObj) : null;
+                          const dk  = day ? fmtDate(new Date(cYear,cMonth,day)) : null;
+                          const dt  = day ? allT.filter(t=>taskOccursOn(t,dk)) : [];
                           return (
                             <div key={di}
                               onDragOver={e=>{if(day)e.preventDefault();}}
@@ -1010,9 +1018,9 @@ export default function App() {
                                   const cl=clientOf(t.client_id);
                                   return (
                                     <div key={t.id} draggable onDragStart={e=>onCalDragStart(e,t)} onDoubleClick={()=>openEdit(t)}
-                                      style={{background:t.color||"#E8623A",borderRadius:4,padding:"2px 5px",fontSize:9,color:textOn(t.color||"#E8623A"),marginBottom:2,cursor:"pointer",lineHeight:1.3,overflow:"hidden"}}>
+                                      style={{background:t.color||"#E8623A",borderRadius:4,padding:"2px 5px",fontSize:9,color:textOn(t.color||"#E8623A"),marginBottom:2,cursor:"pointer",overflow:"hidden"}}>
                                       <div style={{display:"flex",alignItems:"center",gap:3}}>
-                                        <span style={{flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{t.title}{t.is_recurring?" 🔁":""}{t.end_date?" 📅":""}</span>
+                                        <span style={{flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{t.title}{t.is_recurring?" ↻":""}{t.end_date?" ↔":""}</span>
                                         {t.link&&<span>🔗</span>}
                                       </div>
                                       {cl&&<div style={{fontSize:8,opacity:0.85}}>{cl.name}</div>}
