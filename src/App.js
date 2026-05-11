@@ -655,7 +655,7 @@ export default function App() {
           {/* Tipo de tarea */}
           <label style={lbS}>Tipo de tarea</label>
           <div style={{display:"flex",gap:8,marginBottom:"1.1rem"}}>
-            {[["normal","Normal","📌"],["recurring","Recurrente","🔁"],["range","Rango de fechas","📅"]].map(([type,label,icon])=>{
+            {[["normal","Normal","—"],["recurring","Recurrente","↻"],["range","Rango de fechas","↔"]].map(([type,label,icon])=>{
               const active = type==="recurring"?modalForm.is_recurring:type==="range"?!!modalForm.end_date&&!modalForm.is_recurring:!modalForm.is_recurring&&!modalForm.end_date;
               return (
                 <button key={type} onClick={()=>{
@@ -664,7 +664,7 @@ export default function App() {
                   else setModalForm(p=>({...p,is_recurring:false,end_date:""}));
                 }}
                   style={{flex:1,background:active?"#F4F2EE":"transparent",border:`1.5px solid ${active?modalForm.color:"#E8E4DE"}`,borderRadius:8,padding:"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                  <span style={{fontSize:14}}>{icon}</span>
+                  <span style={{fontSize:18,fontWeight:300,color:active?modalForm.color:"#bbb"}}>{icon}</span>
                   <span style={{fontSize:10,fontWeight:active?600:400,color:active?"#1C1C1C":"#999"}}>{label}</span>
                 </button>
               );
@@ -836,8 +836,31 @@ export default function App() {
             </select>
           </div>
           <SidebarTasks/>
-          <div style={{padding:"0.5rem 1rem",borderTop:"1px solid #2a2a2a"}}>
-            <button onClick={()=>openAdd(null,null,null)} style={{width:"100%",background:brand.accent,border:"none",borderRadius:8,color:textOn(brand.accent),fontSize:12,cursor:"pointer",padding:"7px",fontWeight:600}}>+ Nueva tarea</button>
+          <div style={{padding:"0.5rem 1rem",borderTop:"1px solid #2a2a2a",display:"flex",flexDirection:"column",gap:6}}>
+            {/* Quick add */}
+            <div style={{display:"flex",gap:6}}>
+              <input
+                id="quick-add-input"
+                placeholder="Tarea rápida..."
+                onKeyDown={async e=>{
+                  if(e.key==="Enter"&&e.target.value.trim()){
+                    await addTask({...EMPTY_FORM,title:e.target.value.trim()},null,null,null);
+                    e.target.value="";
+                  }
+                }}
+                style={{flex:1,background:"#2a2a2a",border:"none",borderRadius:8,color:"#F4F2EE",fontSize:11,padding:"6px 8px",outline:"none"}}/>
+              <button onClick={async()=>{
+                const inp=document.getElementById("quick-add-input");
+                if(inp&&inp.value.trim()){
+                  await addTask({...EMPTY_FORM,title:inp.value.trim()},null,null,null);
+                  inp.value="";
+                }
+              }} style={{background:brand.accent,border:"none",borderRadius:8,color:textOn(brand.accent),fontSize:16,cursor:"pointer",width:28,fontWeight:700}}>+</button>
+            </div>
+            {/* Full panel button */}
+            <button onClick={()=>openAdd(null,null,null)} style={{width:"100%",background:"transparent",border:`1px solid ${brand.accent}55`,borderRadius:8,color:brand.accent,fontSize:11,cursor:"pointer",padding:"6px",fontWeight:500}}>
+              + Nueva tarea completa
+            </button>
           </div>
         </div>
       )}
