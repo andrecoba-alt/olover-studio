@@ -26,7 +26,7 @@ const HOUR_H     = 56;
 
 const getMonday  = d => { const x=new Date(d),day=x.getDay(); x.setDate(x.getDate()-day+(day===0?-6:1)); x.setHours(0,0,0,0); return x; };
 const addDays    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
-const fmtDate    = d => `${d.getFullYear()}-${String(d.getMonth()).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const fmtDate    = d => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 const fmtDateISO = d => { const x=new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`; };
 const getDIM     = (y,m) => new Date(y,m+1,0).getDate();
 const getFD      = (y,m) => new Date(y,m,1).getDay();
