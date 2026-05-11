@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabase";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 const STATUSES = [
   { value:"pendiente", label:"Pendiente", color:"#F0A500", bg:"#FFF8E7" },
   { value:"asignada",  label:"Asignada",  color:"#3A9E8A", bg:"#E8F7F5" },
@@ -16,7 +15,6 @@ const REC_DAYS  = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 const today     = new Date();
 const HOUR_H    = 56;
 
-// Date helpers — all dates stored as YYYY-MM-DD (ISO)
 const toISO   = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const fromISO = s => { if(!s)return null; const [y,m,d]=s.split("-"); return new Date(parseInt(y),parseInt(m)-1,parseInt(d)); };
 const getMonday = d => { const x=new Date(d),day=x.getDay(); x.setDate(x.getDate()-day+(day===0?-6:1)); x.setHours(0,0,0,0); return x; };
@@ -27,23 +25,21 @@ const lum       = h => { try{const r=parseInt(h.slice(1,3),16)/255,g=parseInt(h.
 const textOn    = bg => lum(bg||"#fff")>0.5?"#1C1C1C":"#ffffff";
 const http      = url => url&&!url.startsWith("http")?`https://${url}`:url;
 
-const taskOccursOn = (task, isoDate) => {
-  if (!isoDate) return false;
+const taskOccursOn = (task, iso) => {
+  if (!iso) return false;
   if (task.is_recurring && (task.recurrence_days||[]).length>0) {
-    const d = fromISO(isoDate);
+    const d=fromISO(iso);
     return d && task.recurrence_days.includes(REC_DAYS[d.getDay()]);
   }
-  if (task.end_date && task.date) {
-    return isoDate >= task.date && isoDate <= task.end_date;
-  }
-  return task.date === isoDate;
+  if (task.end_date && task.date) return iso>=task.date && iso<=task.end_date;
+  return task.date===iso;
 };
 
 let _n = Date.now();
 const uid = () => `t${_n++}`;
 
-const lbS = { display:"block", fontSize:9, letterSpacing:1, color:"#aaa", textTransform:"uppercase", marginBottom:5, fontWeight:500 };
-const inS = { width:"100%", border:"none", borderBottom:"2px solid #E8E4DE", padding:"6px 0", fontSize:14, outline:"none", background:"transparent", color:"#1C1C1C", boxSizing:"border-box" };
+const lbS  = { display:"block", fontSize:9, letterSpacing:1, color:"#aaa", textTransform:"uppercase", marginBottom:5, fontWeight:500 };
+const inS  = { width:"100%", border:"none", borderBottom:"2px solid #E8E4DE", padding:"6px 0", fontSize:14, outline:"none", background:"transparent", color:"#1C1C1C", boxSizing:"border-box" };
 const iBtnS = { background:"none", border:"none", fontSize:17, cursor:"pointer", color:"#666", padding:"3px 7px", borderRadius:8 };
 const PRESETS = [
   { name:"OLOVER",   navBg:"#111111", sideBg:"#1C1C1C", topBg:"#ffffff", accent:"#E8623A" },
@@ -55,105 +51,15 @@ const PRESETS = [
 ];
 const EMPTY = { title:"", link:"", status:"pendiente", comments:"", client_id:"", color:"#E8623A", duration:1, assignees:[], schedules:[], refs:[], is_recurring:false, rec_days:[], date:"", hour:HOURS[0], end_date:"" };
 
-// ─── Login ────────────────────────────────────────────────────────────────────
-function Login() {
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-  const go = async () => {
-    setLoading(true); setErr("");
-    const { error } = await supabase.auth.signInWithOAuth({ provider:"google", options:{ redirectTo:"https://olover-studio.vercel.app" } });
-    if (error) { setErr("Error al iniciar sesión."); setLoading(false); }
-  };
-  return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",fontFamily:"'DM Sans',sans-serif"}}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
-      <div style={{background:"#fff",borderRadius:20,padding:"3rem 2.5rem",width:380,boxShadow:"0 20px 60px rgba(0,0,0,0.1)",textAlign:"center"}}>
-        <div style={{width:56,height:56,borderRadius:14,background:"#E8623A",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 1.5rem"}}>
-          <span style={{color:"#fff",fontSize:20,fontWeight:700}}>OL</span>
-        </div>
-        <p style={{fontSize:9,letterSpacing:3,color:"#bbb",textTransform:"uppercase",marginBottom:6}}>OLOVER Studio</p>
-        <p style={{fontFamily:"'DM Serif Display',serif",fontSize:"1.6rem",color:"#1C1C1C",marginBottom:"0.5rem"}}>Crono</p>
-        <p style={{fontSize:13,color:"#aaa",marginBottom:"2rem"}}>Gestión de proyectos y equipo</p>
-        {err&&<p style={{fontSize:12,color:"#E8623A",marginBottom:"1rem",background:"#FFF0ED",borderRadius:8,padding:"8px 12px"}}>{err}</p>}
-        <button onClick={go} disabled={loading}
-          style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:10,background:"#fff",border:"1.5px solid #E8E4DE",borderRadius:12,padding:"12px 20px",cursor:"pointer",fontSize:14,fontWeight:500,color:"#333"}}>
-          <svg width="18" height="18" viewBox="0 0 18 18">
-            <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
-            <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
-            <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18z"/>
-            <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
-          </svg>
-          {loading?"Entrando...":"Entrar con Google"}
-        </button>
-        <p style={{fontSize:11,color:"#ccc",marginTop:"1.5rem"}}>Solo usuarios autorizados</p>
-      </div>
-    </div>
-  );
-}
-
-// ─── Root ─────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [session, setSession]   = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [denied, setDenied]     = useState(false);
-
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const { data:{ session } } = await supabase.auth.getSession();
-        if (session) {
-          const { data } = await supabase.from("allowed_users").select("email").eq("email",session.user.email).single();
-          if (data) setSession(session); else { setDenied(true); supabase.auth.signOut(); }
-        }
-      } catch(e) {}
-      setLoading(false);
-    };
-    init();
-    const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
-      if (session) {
-        const { data } = await supabase.from("allowed_users").select("email").eq("email",session.user.email).single();
-        if (data) { setSession(session); setDenied(false); }
-        else { setDenied(true); supabase.auth.signOut(); setSession(null); }
-      } else setSession(null);
-      setLoading(false);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  if (loading) return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",flexDirection:"column",gap:12,fontFamily:"sans-serif"}}>
-      <div style={{width:40,height:40,borderRadius:10,background:"#E8623A",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <span style={{color:"#fff",fontSize:14,fontWeight:700}}>OL</span>
-      </div>
-      <p style={{fontSize:13,color:"#aaa"}}>Cargando...</p>
-    </div>
-  );
-
-  if (denied) return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",fontFamily:"sans-serif"}}>
-      <div style={{background:"#fff",borderRadius:20,padding:"3rem",width:360,textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.1)"}}>
-        <p style={{fontSize:32}}>🔒</p>
-        <p style={{fontSize:"1.2rem",fontWeight:600,marginBottom:8}}>Acceso denegado</p>
-        <p style={{color:"#aaa",marginBottom:"1.5rem",fontSize:13}}>Tu correo no está autorizado.</p>
-        <button onClick={()=>supabase.auth.signOut()} style={{background:"#E8623A",border:"none",borderRadius:10,padding:"10px 20px",color:"#fff",cursor:"pointer",fontWeight:600}}>Volver</button>
-      </div>
-    </div>
-  );
-
-  if (!session) return <Login/>;
-  return <Main session={session}/>;
-}
-
-// ─── Main ─────────────────────────────────────────────────────────────────────
-function Main({ session }) {
-  const [brand, setBrand]   = useState({ name:"OLOVER Studio", logo:null, navBg:"#111111", sideBg:"#1C1C1C", topBg:"#ffffff", accent:"#E8623A" });
-  const [boards, setBoards] = useState([]);
+  const [brand, setBrand]     = useState({ name:"OLOVER Studio", logo:null, navBg:"#111111", sideBg:"#1C1C1C", topBg:"#ffffff", accent:"#E8623A" });
+  const [boards, setBoards]   = useState([]);
   const [members, setMembers] = useState([]);
-  const [tasks, setTasks]   = useState([]);
+  const [tasks, setTasks]     = useState([]);
   const [assigns, setAssigns] = useState([]);
   const [clients, setClients] = useState([]);
-  const [holidays, setHols] = useState({});
-  const [ready, setReady]   = useState(false);
+  const [holidays, setHols]   = useState({});
+  const [ready, setReady]     = useState(false);
   const [boardId, setBoardId] = useState("animadores");
   const [sideOpen, setSideOpen] = useState(true);
   const [settOpen, setSettOpen] = useState(false);
@@ -169,17 +75,16 @@ function Main({ session }) {
   const [wStarts, setWStarts]   = useState({ animadores:getMonday(today), disenadores:getMonday(today), proveedores:getMonday(today) });
   const [cYears, setCYears]     = useState({ animadores:today.getFullYear(), disenadores:today.getFullYear(), proveedores:today.getFullYear() });
   const [cMonths, setCMonths]   = useState({ animadores:today.getMonth(), disenadores:today.getMonth(), proveedores:today.getMonth() });
-  const logoRef = useRef();
+  const logoRef  = useRef();
   const titleRef = useRef();
-  const dragRef = useRef(null);
+  const dragRef  = useRef(null);
 
-  // Holidays
   useEffect(() => {
     const load = async (y) => {
       try {
-        const r = await window.fetch(`https://date.nager.at/api/v3/PublicHolidays/${y}/CO`);
-        const d = await r.json();
-        const m = {}; d.forEach(h=>{ m[h.date]=h.localName||h.name; });
+        const r=await window.fetch(`https://date.nager.at/api/v3/PublicHolidays/${y}/CO`);
+        const d=await r.json();
+        const m={}; d.forEach(h=>{m[h.date]=h.localName||h.name;});
         setHols(p=>({...p,[y]:m}));
       } catch(e){}
     };
@@ -188,7 +93,6 @@ function Main({ session }) {
 
   const isHol = d => holidays[d.getFullYear()]?.[toISO(d)]||null;
 
-  // Load data
   useEffect(() => {
     const load = async () => {
       const [{ data:br },{ data:bo },{ data:me },{ data:ta },{ data:as },{ data:cl }] = await Promise.all([
@@ -199,7 +103,7 @@ function Main({ session }) {
         supabase.from("task_assignments").select("*"),
         supabase.from("clients").select("*").order("position"),
       ]);
-      if (br) setBrand({ name:br.name, logo:br.logo, navBg:br.nav_bg, sideBg:br.sidebar_bg, topBg:br.topbar_bg, accent:br.accent });
+      if (br) setBrand({name:br.name,logo:br.logo,navBg:br.nav_bg,sideBg:br.sidebar_bg,topBg:br.topbar_bg,accent:br.accent});
       if (bo) setBoards(bo);
       if (me) setMembers(me);
       if (ta) setTasks(ta);
@@ -208,7 +112,7 @@ function Main({ session }) {
       setReady(true);
     };
     load();
-    const sub = (t,s,q) => supabase.channel(`rt-${t}-${Math.random()}`).on("postgres_changes",{event:"*",schema:"public",table:t},()=>q().then(({data})=>data&&s(data))).subscribe();
+    const sub=(t,s,q)=>supabase.channel(`rt-${t}-${Math.random()}`).on("postgres_changes",{event:"*",schema:"public",table:t},()=>q().then(({data})=>data&&s(data))).subscribe();
     const c1=sub("tasks",setTasks,()=>supabase.from("tasks").select("*").order("created_at"));
     const c2=sub("task_assignments",setAssigns,()=>supabase.from("task_assignments").select("*"));
     const c3=sub("members",setMembers,()=>supabase.from("members").select("*").order("position"));
@@ -219,233 +123,170 @@ function Main({ session }) {
     return ()=>[c1,c2,c3,c4,c5,c6].forEach(c=>supabase.removeChannel(c));
   }, []);
 
-  useEffect(() => { if (modal&&titleRef.current) setTimeout(()=>titleRef.current?.focus(),50); }, [modal]);
+  useEffect(()=>{ if(modal&&titleRef.current)setTimeout(()=>titleRef.current?.focus(),50); },[modal]);
 
-  // Derived
-  const board   = boards.find(b=>b.id===boardId)||boards[0];
-  const bMems   = members.filter(m=>m.board_id===boardId);
-  const view    = views[boardId];
-  const wStart  = wStarts[boardId];
-  const cYear   = cYears[boardId];
-  const cMonth  = cMonths[boardId];
-  const wDates  = WEEK_DAYS.map((_,i)=>addDays(wStart,i));
-  const wLabel  = () => { const e=addDays(wStart,4); return `${wStart.getDate()} – ${e.getDate()} ${MONTHS[e.getMonth()]} ${e.getFullYear()}`; };
+  const board  = boards.find(b=>b.id===boardId)||boards[0];
+  const bMems  = members.filter(m=>m.board_id===boardId);
+  const view   = views[boardId];
+  const wStart = wStarts[boardId];
+  const cYear  = cYears[boardId];
+  const cMonth = cMonths[boardId];
+  const wDates = WEEK_DAYS.map((_,i)=>addDays(wStart,i));
+  const wLabel = () => { const e=addDays(wStart,4); return `${wStart.getDate()} – ${e.getDate()} ${MONTHS[e.getMonth()]} ${e.getFullYear()}`; };
 
-  const setView  = v  => setViews(p=>({...p,[boardId]:v}));
-  const setWS    = fn => setWStarts(p=>({...p,[boardId]:typeof fn==="function"?fn(p[boardId]):fn}));
-  const prevMo   = () => { if(cMonth===0){setCMonths(p=>({...p,[boardId]:11}));setCYears(p=>({...p,[boardId]:p[boardId]-1}));}else setCMonths(p=>({...p,[boardId]:p[boardId]-1})); };
-  const nextMo   = () => { if(cMonth===11){setCMonths(p=>({...p,[boardId]:0}));setCYears(p=>({...p,[boardId]:p[boardId]+1}));}else setCMonths(p=>({...p,[boardId]:p[boardId]+1})); };
+  const setView = v  => setViews(p=>({...p,[boardId]:v}));
+  const setWS   = fn => setWStarts(p=>({...p,[boardId]:typeof fn==="function"?fn(p[boardId]):fn}));
+  const prevMo  = () => { if(cMonth===0){setCMonths(p=>({...p,[boardId]:11}));setCYears(p=>({...p,[boardId]:p[boardId]-1}));}else setCMonths(p=>({...p,[boardId]:p[boardId]-1})); };
+  const nextMo  = () => { if(cMonth===11){setCMonths(p=>({...p,[boardId]:0}));setCYears(p=>({...p,[boardId]:p[boardId]+1}));}else setCMonths(p=>({...p,[boardId]:p[boardId]+1})); };
 
-  const mTasks   = useCallback(mid => { const ids=assigns.filter(a=>a.member_id===mid).map(a=>a.task_id); return tasks.filter(t=>ids.includes(t.id)); }, [assigns,tasks]);
-  const bTasks   = useCallback(() => { const mids=bMems.map(m=>m.id); const ids=new Set(assigns.filter(a=>mids.includes(a.member_id)).map(a=>a.task_id)); return tasks.filter(t=>ids.has(t.id)); }, [assigns,tasks,bMems]);
-  const sideTasks= useCallback(() => {
+  const mTasks  = useCallback(mid=>{ const ids=assigns.filter(a=>a.member_id===mid).map(a=>a.task_id); return tasks.filter(t=>ids.includes(t.id)); },[assigns,tasks]);
+  const bTasks  = useCallback(()=>{ const mids=bMems.map(m=>m.id); const ids=new Set(assigns.filter(a=>mids.includes(a.member_id)).map(a=>a.task_id)); return tasks.filter(t=>ids.has(t.id)); },[assigns,tasks,bMems]);
+  const sTasks  = useCallback(()=>{
     const mids=bMems.map(m=>m.id);
     const ids=new Set(assigns.filter(a=>mids.includes(a.member_id)).map(a=>a.task_id));
     const unass=tasks.filter(t=>t.board_id===boardId&&assigns.filter(a=>a.task_id===t.id).length===0);
     const ass=tasks.filter(t=>ids.has(t.id));
     return [...new Map([...unass,...ass].map(t=>[t.id,t])).values()];
-  }, [assigns,tasks,bMems,boardId]);
+  },[assigns,tasks,bMems,boardId]);
 
-  const tAssignees = useCallback(tid => { const ids=assigns.filter(a=>a.task_id===tid).map(a=>a.member_id); return members.filter(m=>ids.includes(m.id)); }, [assigns,members]);
+  const tAss = useCallback(tid=>{ const ids=assigns.filter(a=>a.task_id===tid).map(a=>a.member_id); return members.filter(m=>ids.includes(m.id)); },[assigns,members]);
 
-  // Per-member schedule: stored in task.assignee_schedules as [{memberId, date (ISO), hour}]
   const getMSch = (task, mid) => {
     const s=(task.assignee_schedules||[]).find(s=>s.memberId===mid&&s.date);
-    return s||{ date:task.date, hour:task.hour||HOURS[0] };
+    return s||{date:task.date,hour:task.hour||HOURS[0]};
   };
 
-  const cOf = id => clients.find(c=>c.id===id);
-  const mOf = id => members.find(m=>m.id===id);
+  const cOf=id=>clients.find(c=>c.id===id);
+  const mOf=id=>members.find(m=>m.id===id);
 
-  // ── CRUD ──
-  const addTask = async (f, memberId, date, hour) => {
+  const addTask = async (f, mid, date, hour) => {
     const id=uid();
-    const allA=[...new Set([...(memberId?[memberId]:[]),...(f.assignees||[])])];
-    const scheds=allA.map(mid=>{ const s=(f.schedules||[]).find(s=>s.memberId===mid); return {memberId:mid,date:s?.date||date||"",hour:s?.hour||hour||HOURS[0]}; });
-    const mainDate=scheds[0]?.date||date||null;
-    const mainHour=scheds[0]?.hour||hour||HOURS[0];
+    const allA=[...new Set([...(mid?[mid]:[]),...(f.assignees||[])])];
+    const scheds=allA.map(m=>{ const s=(f.schedules||[]).find(s=>s.memberId===m); return {memberId:m,date:s?.date||date||"",hour:s?.hour||hour||HOURS[0]}; });
     await supabase.from("tasks").insert({
-      id, board_id:boardId, member_id:allA[0]||null,
-      title:f.title||"Sin título", status:f.status||"pendiente",
-      link:f.link||"", comments:f.comments||"", client_id:f.client_id||"",
-      color:f.color||"#E8623A", duration:f.duration||1,
-      reference_links:f.refs||[], assignee_schedules:scheds,
-      date:mainDate, hour:mainHour,
-      is_recurring:f.is_recurring||false,
-      recurrence_days:f.rec_days||[], end_date:f.end_date||null,
+      id,board_id:boardId,member_id:allA[0]||null,
+      title:f.title||"Sin título",status:f.status||"pendiente",
+      link:f.link||"",comments:f.comments||"",client_id:f.client_id||"",
+      color:f.color||"#E8623A",duration:f.duration||1,
+      reference_links:f.refs||[],assignee_schedules:scheds,
+      date:scheds[0]?.date||date||null,hour:scheds[0]?.hour||hour||HOURS[0],
+      is_recurring:f.is_recurring||false,recurrence_days:f.rec_days||[],end_date:f.end_date||null,
     });
-    if (allA.length>0) await supabase.from("task_assignments").insert(allA.map(mid=>({id:uid(),task_id:id,member_id:mid})));
+    if(allA.length>0)await supabase.from("task_assignments").insert(allA.map(m=>({id:uid(),task_id:id,member_id:m})));
   };
 
   const quickAdd = async () => {
-    if (!quick.trim()) return;
-    await supabase.from("tasks").insert({ id:uid(), board_id:boardId, title:quick.trim(), status:"pendiente", color:"#E8623A", duration:1, reference_links:[], assignee_schedules:[], is_recurring:false, recurrence_days:[] });
+    if(!quick.trim())return;
+    await supabase.from("tasks").insert({id:uid(),board_id:boardId,title:quick.trim(),status:"pendiente",color:"#E8623A",duration:1,reference_links:[],assignee_schedules:[],is_recurring:false,recurrence_days:[]});
     setQuick("");
   };
 
-  const updateTask = async (id, patch) => {
-    const { assignees, schedules, ...rest } = patch;
-    const fm={ title:"title",status:"status",link:"link",date:"date",hour:"hour",end_date:"end_date",comments:"comments",client_id:"client_id",color:"color",duration:"duration",reference_links:"reference_links",memberId:"member_id",is_recurring:"is_recurring",recurrence_days:"recurrence_days" };
+  const updateTask = async (id,patch) => {
+    const{assignees,schedules,...rest}=patch;
+    const fm={title:"title",status:"status",link:"link",date:"date",hour:"hour",end_date:"end_date",comments:"comments",client_id:"client_id",color:"color",duration:"duration",reference_links:"reference_links",memberId:"member_id",is_recurring:"is_recurring",recurrence_days:"recurrence_days"};
     const db={};
-    Object.keys(rest).forEach(k=>{ if(fm[k])db[fm[k]]=rest[k]; });
-    if (schedules) {
-      db.assignee_schedules=schedules;
-      if (schedules[0]?.date) { db.date=schedules[0].date; db.hour=schedules[0].hour||HOURS[0]; }
-    }
-    if (Object.keys(db).length>0) await supabase.from("tasks").update(db).eq("id",id);
-    if (assignees!==undefined) {
-      await supabase.from("task_assignments").delete().eq("task_id",id);
-      if (assignees.length>0) await supabase.from("task_assignments").insert(assignees.map(mid=>({id:uid(),task_id:id,member_id:mid})));
-    }
+    Object.keys(rest).forEach(k=>{if(fm[k])db[fm[k]]=rest[k];});
+    if(schedules){db.assignee_schedules=schedules;if(schedules[0]?.date){db.date=schedules[0].date;db.hour=schedules[0].hour||HOURS[0];}}
+    if(Object.keys(db).length>0)await supabase.from("tasks").update(db).eq("id",id);
+    if(assignees!==undefined){await supabase.from("task_assignments").delete().eq("task_id",id);if(assignees.length>0)await supabase.from("task_assignments").insert(assignees.map(m=>({id:uid(),task_id:id,member_id:m})));}
   };
 
-  const delTask = async id => { await supabase.from("task_assignments").delete().eq("task_id",id); await supabase.from("tasks").delete().eq("id",id); };
-  const dupTask = async task => {
+  const delTask=async id=>{await supabase.from("task_assignments").delete().eq("task_id",id);await supabase.from("tasks").delete().eq("id",id);};
+  const dupTask=async task=>{
     const aids=assigns.filter(a=>a.task_id===task.id).map(a=>a.member_id);
-    const {id:_,created_at,...rest}=task;
-    const id=uid();
+    const{id:_,created_at,...rest}=task; const id=uid();
     await supabase.from("tasks").insert({...rest,id,title:`${task.title} (copia)`});
-    if (aids.length>0) await supabase.from("task_assignments").insert(aids.map(mid=>({id:uid(),task_id:id,member_id:mid})));
+    if(aids.length>0)await supabase.from("task_assignments").insert(aids.map(m=>({id:uid(),task_id:id,member_id:m})));
     setModal(null);
   };
 
-  const addMember = async bid => {
-    const bm=members.filter(m=>m.board_id===bid);
-    const colors=["#E8623A","#3A6FE8","#7B6BE0","#3A9E8A","#C49A3C","#E06B9A"];
-    const b=boards.find(x=>x.id===bid);
-    await supabase.from("members").insert({id:uid(),board_id:bid,name:`${b?.label||""} ${bm.length+1}`,color:colors[bm.length%colors.length],position:bm.length});
-  };
-  const updMember = async (id,p) => supabase.from("members").update(p).eq("id",id);
-  const delMember = async id => { await supabase.from("task_assignments").delete().eq("member_id",id); await supabase.from("members").delete().eq("id",id); };
-  const addClient = async () => {
-    if (!newClient.trim()) return;
-    const colors=["#E8623A","#3A6FE8","#7B6BE0","#3A9E8A","#C49A3C","#E06B9A","#4CAF50","#58A6FF"];
-    await supabase.from("clients").insert({id:uid(),name:newClient.trim(),color:colors[clients.length%colors.length],position:clients.length});
-    setNewClient("");
-  };
-  const updClient = async (id,p) => supabase.from("clients").update(p).eq("id",id);
-  const delClient = async id => supabase.from("clients").delete().eq("id",id);
-  const updBoard  = async (id,p) => supabase.from("boards").update(p).eq("id",id);
-  const saveBrand = async b => {
-    const {data}=await supabase.from("brand").select("id").single();
-    await supabase.from("brand").update({name:b.name,logo:b.logo,nav_bg:b.navBg,sidebar_bg:b.sideBg,topbar_bg:b.topBg,accent:b.accent}).eq("id",data.id);
-  };
+  const addMember=async bid=>{const bm=members.filter(m=>m.board_id===bid);const colors=["#E8623A","#3A6FE8","#7B6BE0","#3A9E8A","#C49A3C","#E06B9A"];const b=boards.find(x=>x.id===bid);await supabase.from("members").insert({id:uid(),board_id:bid,name:`${b?.label||""} ${bm.length+1}`,color:colors[bm.length%colors.length],position:bm.length});};
+  const updMember=async(id,p)=>supabase.from("members").update(p).eq("id",id);
+  const delMember=async id=>{await supabase.from("task_assignments").delete().eq("member_id",id);await supabase.from("members").delete().eq("id",id);};
+  const addClient=async()=>{if(!newClient.trim())return;const colors=["#E8623A","#3A6FE8","#7B6BE0","#3A9E8A","#C49A3C","#E06B9A","#4CAF50","#58A6FF"];await supabase.from("clients").insert({id:uid(),name:newClient.trim(),color:colors[clients.length%colors.length],position:clients.length});setNewClient("");};
+  const updClient=async(id,p)=>supabase.from("clients").update(p).eq("id",id);
+  const delClient=async id=>supabase.from("clients").delete().eq("id",id);
+  const updBoard=async(id,p)=>supabase.from("boards").update(p).eq("id",id);
+  const saveBrand=async b=>{const{data}=await supabase.from("brand").select("id").single();await supabase.from("brand").update({name:b.name,logo:b.logo,nav_bg:b.navBg,sidebar_bg:b.sideBg,topbar_bg:b.topBg,accent:b.accent}).eq("id",data.id);};
 
-  // ── Modal ──
-  const openAdd = (mid,date,hour) => {
-    const d=date||""; const h=hour||HOURS[0];
+  const openAdd=(mid,date,hour)=>{
+    const d=date||"";const h=hour||HOURS[0];
     setModal({mode:"add",mid,date:d,hour:h});
     setForm({...EMPTY,assignees:mid?[mid]:[],schedules:mid?[{memberId:mid,date:d,hour:h}]:[],date:d,hour:h});
   };
 
-  const openEdit = task => {
+  const openEdit=task=>{
     const aids=assigns.filter(a=>a.task_id===task.id).map(a=>a.member_id);
-    const scheds=aids.map(mid=>{ const s=(task.assignee_schedules||[]).find(s=>s.memberId===mid&&s.date); return {memberId:mid,date:s?.date||task.date||"",hour:s?.hour||task.hour||HOURS[0]}; });
+    const scheds=aids.map(m=>{const s=(task.assignee_schedules||[]).find(s=>s.memberId===m&&s.date);return{memberId:m,date:s?.date||task.date||"",hour:s?.hour||task.hour||HOURS[0]};});
     setModal({mode:"edit",task});
-    setForm({
-      title:task.title, link:task.link||"", status:task.status||"pendiente",
-      comments:task.comments||"", client_id:task.client_id||"",
-      color:task.color||"#E8623A", duration:task.duration||1,
-      assignees:aids, schedules:scheds, refs:task.reference_links||[],
-      date:scheds[0]?.date||task.date||"", hour:scheds[0]?.hour||task.hour||HOURS[0],
-      end_date:task.end_date||"", is_recurring:task.is_recurring||false, rec_days:task.recurrence_days||[],
-    });
+    setForm({title:task.title,link:task.link||"",status:task.status||"pendiente",comments:task.comments||"",client_id:task.client_id||"",color:task.color||"#E8623A",duration:task.duration||1,assignees:aids,schedules:scheds,refs:task.reference_links||[],date:scheds[0]?.date||task.date||"",hour:scheds[0]?.hour||task.hour||HOURS[0],end_date:task.end_date||"",is_recurring:task.is_recurring||false,rec_days:task.recurrence_days||[]});
   };
 
-  const saveModal = async () => {
-    if (!form.title.trim()) return;
+  const saveModal=async()=>{
+    if(!form.title.trim())return;
     const scheds=form.schedules.map(s=>({...s,date:s.date||form.date||null,hour:s.hour||form.hour||HOURS[0]}));
-    if (modal.mode==="add") {
-      await addTask({...form,schedules:scheds},modal.mid,form.date,form.hour);
-    } else {
-      await updateTask(modal.task.id,{
-        title:form.title,link:form.link,status:form.status,comments:form.comments,
-        client_id:form.client_id,color:form.color,duration:form.duration,
-        reference_links:form.refs, assignees:form.assignees, schedules:scheds,
-        date:form.is_recurring?null:(scheds[0]?.date||form.date||null),
-        hour:scheds[0]?.hour||form.hour||HOURS[0],
-        end_date:form.end_date||null, is_recurring:form.is_recurring, recurrence_days:form.rec_days,
-      });
-    }
+    if(modal.mode==="add"){await addTask({...form,schedules:scheds},modal.mid,form.date,form.hour);}
+    else{await updateTask(modal.task.id,{title:form.title,link:form.link,status:form.status,comments:form.comments,client_id:form.client_id,color:form.color,duration:form.duration,reference_links:form.refs,assignees:form.assignees,schedules:scheds,date:form.is_recurring?null:(scheds[0]?.date||form.date||null),hour:scheds[0]?.hour||form.hour||HOURS[0],end_date:form.end_date||null,is_recurring:form.is_recurring,recurrence_days:form.rec_days});}
     setModal(null);
   };
 
-  const sf = (k,v) => setForm(p=>({...p,[k]:v}));
+  const sf=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const toggleA=mid=>{const sel=form.assignees.includes(mid);const newA=sel?form.assignees.filter(id=>id!==mid):[...form.assignees,mid];const newS=sel?form.schedules.filter(s=>s.memberId!==mid):[...form.schedules,{memberId:mid,date:form.date||"",hour:form.hour||HOURS[0]}];setForm(p=>({...p,assignees:newA,schedules:newS}));};
+  const updSch=(mid,field,val)=>setForm(p=>({...p,schedules:p.schedules.map(s=>s.memberId===mid?{...s,[field]:val}:s)}));
 
-  const toggleA = mid => {
-    const sel=form.assignees.includes(mid);
-    const newA=sel?form.assignees.filter(id=>id!==mid):[...form.assignees,mid];
-    const newS=sel?form.schedules.filter(s=>s.memberId!==mid):[...form.schedules,{memberId:mid,date:form.date||"",hour:form.hour||HOURS[0]}];
-    setForm(p=>({...p,assignees:newA,schedules:newS}));
-  };
-
-  const updSch = (mid,field,val) => setForm(p=>({...p,schedules:p.schedules.map(s=>s.memberId===mid?{...s,[field]:val}:s)}));
-
-  // ── Drag ──
-  const onDragStart = (e,task) => { e.stopPropagation(); dragRef.current=task; };
-  const onDrop = async (e,mid,date,hour) => {
-    e.preventDefault();
-    const t=dragRef.current; if (!t) return;
+  const onDragStart=(e,task)=>{e.stopPropagation();dragRef.current=task;};
+  const onDrop=async(e,mid,date,hour)=>{
+    e.preventDefault();const t=dragRef.current;if(!t)return;
     const aids=assigns.filter(a=>a.task_id===t.id).map(a=>a.member_id);
-    const bMids=bMems.map(m=>m.id);
-    const cross=aids.filter(id=>!bMids.includes(id));
+    const bMids=bMems.map(m=>m.id);const cross=aids.filter(id=>!bMids.includes(id));
     const newA=[...cross,mid];
-    const newS=newA.map(m=>{ if(m===mid)return{memberId:mid,date,hour}; const f=(t.assignee_schedules||[]).find(s=>s.memberId===m&&s.date); return f||{memberId:m,date:t.date,hour:t.hour||HOURS[0]}; });
+    const newS=newA.map(m=>{if(m===mid)return{memberId:mid,date,hour};const f=(t.assignee_schedules||[]).find(s=>s.memberId===m&&s.date);return f||{memberId:m,date:t.date,hour:t.hour||HOURS[0]};});
     await updateTask(t.id,{date,hour,memberId:mid,assignees:newA,schedules:newS});
     dragRef.current=null;
   };
 
-  const handleLogo = e => { const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=ev=>setBrand(p=>({...p,logo:ev.target.result})); r.readAsDataURL(f); };
+  const handleLogo=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>setBrand(p=>({...p,logo:ev.target.result}));r.readAsDataURL(f);};
 
-  if (!ready) return (
+  if(!ready)return(
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",flexDirection:"column",gap:12,fontFamily:"sans-serif"}}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
       <div style={{width:40,height:40,borderRadius:10,background:"#E8623A",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <span style={{color:"#fff",fontSize:14,fontWeight:700}}>OL</span>
       </div>
-      <p style={{fontSize:13,color:"#aaa"}}>Cargando datos...</p>
+      <p style={{fontSize:13,color:"#aaa"}}>Cargando...</p>
     </div>
   );
 
-  // ── Sidebar task list ──
-  const SideTasks = () => {
-    const all=sideTasks();
-    const fil=fClient?all.filter(t=>t.client_id===fClient):all;
-    return (
+  const SideTasks=()=>{
+    const all=sTasks();const fil=fClient?all.filter(t=>t.client_id===fClient):all;
+    return(
       <div style={{flex:1,overflowY:"auto",padding:"0.5rem"}}>
         {STATUSES.map(st=>{
-          const stT=fil.filter(t=>t.status===st.value);
-          const isO=openG[st.value];
-          const byC={};
-          stT.forEach(t=>{const k=t.client_id||"_";if(!byC[k])byC[k]=[];byC[k].push(t);});
-          return (
+          const stT=fil.filter(t=>t.status===st.value);const isO=openG[st.value];
+          const byC={};stT.forEach(t=>{const k=t.client_id||"_";if(!byC[k])byC[k]=[];byC[k].push(t);});
+          return(
             <div key={st.value} style={{marginBottom:6}}>
-              <button onClick={()=>setOpenG(p=>({...p,[st.value]:!p[st.value]}))}
-                style={{display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",width:"100%",padding:"4px 6px",borderRadius:6}}>
+              <button onClick={()=>setOpenG(p=>({...p,[st.value]:!p[st.value]}))} style={{display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",width:"100%",padding:"4px 6px",borderRadius:6}}>
                 <span style={{fontSize:8,color:st.color}}>●</span>
                 <span style={{fontSize:10,fontWeight:600,color:st.color,textTransform:"uppercase",letterSpacing:1}}>{st.label}</span>
                 <span style={{fontSize:10,color:"#555",marginLeft:"auto"}}>{stT.length}</span>
                 <span style={{fontSize:10,color:"#555"}}>{isO?"▾":"▸"}</span>
               </button>
               {isO&&Object.entries(byC).map(([ck,cT])=>{
-                const cl=ck==="_"?null:cOf(ck);
-                const isOC=openC[`${st.value}-${ck}`]!==false;
-                return (
+                const cl=ck==="_"?null:cOf(ck);const isOC=openC[`${st.value}-${ck}`]!==false;
+                return(
                   <div key={ck} style={{marginLeft:8,marginBottom:2}}>
-                    <button onClick={()=>setOpenC(p=>({...p,[`${st.value}-${ck}`]:!isOC}))}
-                      style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",cursor:"pointer",width:"100%",padding:"3px 4px",borderRadius:4}}>
+                    <button onClick={()=>setOpenC(p=>({...p,[`${st.value}-${ck}`]:!isOC}))} style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",cursor:"pointer",width:"100%",padding:"3px 4px",borderRadius:4}}>
                       {cl&&<div style={{width:6,height:6,borderRadius:"50%",background:cl.color,flexShrink:0}}/>}
                       <span style={{fontSize:10,color:cl?cl.color:"#555",fontWeight:500}}>{cl?cl.name:"Sin cliente"}</span>
                       <span style={{fontSize:9,color:"#444",marginLeft:"auto"}}>{cT.length} {isOC?"▾":"▸"}</span>
                     </button>
                     {isOC&&cT.map(t=>{
-                      const ass=tAssignees(t.id);
-                      return (
-                        <div key={t.id} onDoubleClick={()=>openEdit(t)}
-                          style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 6px",margin:"2px 0",background:"#252525",borderLeft:`3px solid ${t.color||"#444"}`,borderRadius:"0 6px 6px 0",cursor:"pointer"}}>
+                      const ass=tAss(t.id);
+                      return(
+                        <div key={t.id} onDoubleClick={()=>openEdit(t)} style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 6px",margin:"2px 0",background:"#252525",borderLeft:`3px solid ${t.color||"#444"}`,borderRadius:"0 6px 6px 0",cursor:"pointer"}}>
                           <div style={{flex:1,minWidth:0}}>
                             <p style={{fontSize:11,color:t.status==="terminada"?"#555":"#ddd",margin:0,lineHeight:1.3,textDecoration:t.status==="terminada"?"line-through":"none",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title}</p>
-                            {t.is_recurring&&<span style={{fontSize:9,color:"#58A6FF",background:"#58A6FF22",borderRadius:10,padding:"1px 5px"}}>↻</span>}
-                            {t.end_date&&!t.is_recurring&&<span style={{fontSize:9,color:"#C49A3C",background:"#C49A3C22",borderRadius:10,padding:"1px 5px",marginLeft:3}}>↔</span>}
                             {ass.length>0&&<div style={{display:"flex",gap:2,marginTop:3,flexWrap:"wrap"}}>{ass.map(m=><span key={m.id} style={{fontSize:9,background:m.color+"33",color:m.color,borderRadius:10,padding:"1px 5px"}}>{m.name}</span>)}</div>}
                           </div>
                           <button onClick={e=>{e.stopPropagation();openEdit(t);}} style={{background:"none",border:"none",color:"#555",fontSize:11,cursor:"pointer",padding:0}}>✎</button>
@@ -463,10 +304,9 @@ function Main({ session }) {
     );
   };
 
-  // ── Task block on calendar ──
-  const TBlock = ({t}) => {
-    const cl=cOf(t.client_id); const dur=t.duration||1;
-    return (
+  const TBlock=({t})=>{
+    const cl=cOf(t.client_id);const dur=t.duration||1;
+    return(
       <div draggable onDragStart={e=>onDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
         style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#E8623A",borderRadius:6,padding:"3px 6px",cursor:"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
         <p style={{fontSize:10,fontWeight:600,color:textOn(t.color||"#E8623A"),margin:0,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}{t.is_recurring?" ↻":""}{t.end_date?" ↔":""}</p>
@@ -476,8 +316,154 @@ function Main({ session }) {
     );
   };
 
-  // ── Settings ──
-  const Settings = () => (
+  const Modal=()=>{
+    const isEdit=modal.mode==="edit";const refs=form.refs||[];
+    const ttype=form.is_recurring?"rec":form.end_date?"range":"normal";
+    return(
+      <div onClick={()=>setModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,backdropFilter:"blur(3px)"}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,padding:"1.75rem",width:520,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:"1rem"}}>
+            <div style={{width:14,height:14,borderRadius:"50%",background:form.color}}/>
+            <p style={{fontFamily:"'DM Serif Display',serif",fontSize:"1.15rem",color:"#1C1C1C",margin:0,flex:1}}>{isEdit?"Editar":"Nueva tarea"}</p>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{position:"relative"}}>
+                <div style={{width:32,height:32,borderRadius:8,background:form.color,cursor:"pointer",border:"2px solid #E8E4DE"}} onClick={()=>document.getElementById("pk-task").click()}/>
+                <input id="pk-task" type="color" value={form.color} onChange={e=>sf("color",e.target.value)} style={{position:"absolute",opacity:0,width:32,height:32,top:0,left:0}}/>
+              </div>
+              <input value={form.color} onChange={e=>sf("color",e.target.value)} maxLength={7} style={{width:72,border:"1px solid #E8E4DE",borderRadius:6,padding:"4px 6px",fontSize:11,outline:"none",fontFamily:"monospace",color:"#555"}}/>
+            </div>
+          </div>
+          <label style={lbS}>Nombre</label>
+          <input ref={titleRef} value={form.title} onChange={e=>sf("title",e.target.value)} placeholder="Nombre de la tarea..." style={{...inS,borderBottomColor:form.color,marginBottom:"1.1rem"}}/>
+          <label style={lbS}>Cliente</label>
+          <select value={form.client_id} onChange={e=>sf("client_id",e.target.value)} style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",marginBottom:"1.1rem",cursor:"pointer"}}>
+            <option value="">— Sin cliente —</option>
+            {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <label style={lbS}>Asignar a</label>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+            {members.map(m=>{const sel=form.assignees.includes(m.id);const brd=boards.find(b=>b.id===m.board_id);return(
+              <button key={m.id} onClick={()=>toggleA(m.id)} style={{display:"flex",alignItems:"center",gap:5,background:sel?m.color:"#F4F2EE",border:`1.5px solid ${sel?m.color:"transparent"}`,borderRadius:20,padding:"4px 10px",cursor:"pointer"}}>
+                <div style={{width:16,height:16,borderRadius:"50%",background:sel?"rgba(255,255,255,0.3)":m.color,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{(m.name||"?")[0]}</span></div>
+                <span style={{fontSize:11,color:sel?textOn(m.color):"#555",fontWeight:sel?600:400}}>{m.name}</span>
+                {brd&&<span style={{fontSize:9,color:sel?textOn(m.color)+"99":"#aaa"}}>({brd.label})</span>}
+              </button>
+            );})}
+          </div>
+          {form.schedules.length>0&&!form.is_recurring&&(
+            <div style={{background:"#FAFAF9",border:"1px solid #E8E4DE",borderRadius:10,padding:"10px 12px",marginBottom:"1.1rem"}}>
+              <p style={{fontSize:9,color:"#aaa",textTransform:"uppercase",letterSpacing:1,margin:"0 0 8px",fontWeight:500}}>Horario por persona</p>
+              {form.schedules.map(s=>{const m=mOf(s.memberId);if(!m)return null;return(
+                <div key={s.memberId} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                  <div style={{width:18,height:18,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{m.name[0]}</span></div>
+                  <span style={{fontSize:11,color:"#555",width:60}}>{m.name}</span>
+                  <input type="date" value={s.date||""} onChange={e=>updSch(s.memberId,"date",e.target.value)} style={{flex:1,border:"none",borderBottom:"1px solid #E8E4DE",padding:"3px 0",fontSize:11,outline:"none",background:"transparent",color:"#1C1C1C"}}/>
+                  <select value={s.hour||HOURS[0]} onChange={e=>updSch(s.memberId,"hour",e.target.value)} style={{border:"none",borderBottom:"1px solid #E8E4DE",padding:"3px 0",fontSize:11,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer"}}>
+                    {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+              );})}
+            </div>
+          )}
+          <label style={lbS}>Tipo</label>
+          <div style={{display:"flex",gap:8,marginBottom:"1.1rem"}}>
+            {[["normal","Normal","—"],["rec","Recurrente","↻"],["range","Rango","↔"]].map(([t,l,ic])=>{const a=ttype===t;return(
+              <button key={t} onClick={()=>{if(t==="rec")setForm(p=>({...p,is_recurring:true,end_date:""}));else if(t==="range")setForm(p=>({...p,is_recurring:false,end_date:p.end_date||""}));else setForm(p=>({...p,is_recurring:false,end_date:""}));}}
+                style={{flex:1,background:a?"#F4F2EE":"transparent",border:`1.5px solid ${a?form.color:"#E8E4DE"}`,borderRadius:8,padding:"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                <span style={{fontSize:18,fontWeight:300,color:a?form.color:"#bbb"}}>{ic}</span>
+                <span style={{fontSize:10,fontWeight:a?600:400,color:a?"#1C1C1C":"#999"}}>{l}</span>
+              </button>
+            );})}
+          </div>
+          {form.is_recurring&&(
+            <div style={{background:"#F0F7FF",border:"1px solid #B5D4F4",borderRadius:10,padding:"10px 12px",marginBottom:"1.1rem"}}>
+              <p style={{fontSize:9,color:"#3A6FE8",textTransform:"uppercase",letterSpacing:1,margin:"0 0 8px",fontWeight:500}}>Días</p>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                {REC_DAYS.map(d=>{const s=(form.rec_days||[]).includes(d);return(
+                  <button key={d} onClick={()=>{const ds=form.rec_days||[];sf("rec_days",ds.includes(d)?ds.filter(x=>x!==d):[...ds,d]);}}
+                    style={{background:s?form.color:"#fff",border:`1px solid ${s?form.color:"#E8E4DE"}`,borderRadius:20,padding:"3px 10px",fontSize:11,cursor:"pointer",color:s?textOn(form.color):"#666"}}>{d}</button>
+                );})}
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <span style={{fontSize:11,color:"#555"}}>Hora:</span>
+                <select value={form.hour||HOURS[0]} onChange={e=>sf("hour",e.target.value)} style={{border:"none",borderBottom:"1px solid #B5D4F4",padding:"3px 0",fontSize:12,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer"}}>
+                  {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+          {!form.is_recurring&&(
+            <div style={{display:"flex",gap:12,marginBottom:"1.1rem"}}>
+              <div style={{flex:1}}>
+                <label style={lbS}>Fecha inicio</label>
+                <input type="date" value={form.date||""} onChange={e=>{const v=e.target.value;setForm(p=>({...p,date:v,schedules:p.schedules.map(s=>({...s,date:v}))}));}} style={{...inS,borderBottomColor:"#E8E4DE",fontSize:13}}/>
+              </div>
+              <div style={{flex:1}}>
+                <label style={lbS}>Fecha fin <span style={{color:"#bbb",fontWeight:400}}>(opcional)</span></label>
+                <input type="date" value={form.end_date||""} onChange={e=>sf("end_date",e.target.value)} style={{...inS,borderBottomColor:"#E8E4DE",fontSize:13}}/>
+              </div>
+              {!form.end_date&&(
+                <div style={{flex:1}}>
+                  <label style={lbS}>Hora</label>
+                  <select value={form.hour||HOURS[0]} onChange={e=>{const v=e.target.value;setForm(p=>({...p,hour:v,schedules:p.schedules.map(s=>({...s,hour:v}))}));}} style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer"}}>
+                    {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+          {!form.end_date&&!form.is_recurring&&(
+            <>
+              <label style={lbS}>Duración (horas)</label>
+              <select value={form.duration||1} onChange={e=>sf("duration",parseInt(e.target.value))} style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer",marginBottom:"1.1rem"}}>
+                {[1,2,3,4,5,6,7,8].map(h=><option key={h} value={h}>{h}h</option>)}
+              </select>
+            </>
+          )}
+          <label style={lbS}>Estado</label>
+          <div style={{display:"flex",gap:6,marginBottom:"1.1rem"}}>
+            {STATUSES.map(s=>(
+              <button key={s.value} onClick={()=>sf("status",s.value)} style={{flex:1,background:form.status===s.value?s.bg:"#F4F2EE",border:`1.5px solid ${form.status===s.value?s.color:"transparent"}`,borderRadius:8,padding:"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                <div style={{width:7,height:7,borderRadius:"50%",background:s.color}}/>
+                <span style={{fontSize:10,fontWeight:form.status===s.value?600:400,color:form.status===s.value?s.color:"#999"}}>{s.label}</span>
+              </button>
+            ))}
+          </div>
+          <label style={lbS}>Instrucciones</label>
+          <textarea value={form.comments} onChange={e=>sf("comments",e.target.value)} placeholder="Instrucciones..." style={{width:"100%",border:"1px solid #E8E4DE",borderRadius:10,padding:"10px 12px",fontSize:13,outline:"none",background:"#FAFAF9",color:"#1C1C1C",resize:"vertical",minHeight:80,fontFamily:"'DM Sans',sans-serif",marginBottom:"1.1rem",boxSizing:"border-box"}}/>
+          <label style={lbS}>Links de referencia</label>
+          {refs.map((r,i)=>(
+            <div key={i} style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
+              <input value={r.name||""} onChange={e=>{const a=[...refs];a[i]={...a[i],name:e.target.value};sf("refs",a);}} placeholder="Nombre" style={{width:120,border:"none",borderBottom:"1px solid #E8E4DE",fontSize:12,outline:"none",background:"transparent",color:"#1C1C1C",padding:"4px 0"}}/>
+              <input value={r.url||""} onChange={e=>{const a=[...refs];a[i]={...a[i],url:e.target.value};sf("refs",a);}} placeholder="https://..." style={{flex:1,border:"none",borderBottom:"1px solid #E8E4DE",fontSize:12,outline:"none",background:"transparent",color:"#1C1C1C",padding:"4px 0"}}/>
+              {r.url&&<a href={http(r.url)} target="_blank" rel="noreferrer" style={{fontSize:14,color:"#3A6FE8",textDecoration:"none"}}>↗</a>}
+              <button onClick={()=>sf("refs",refs.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#ccc",cursor:"pointer",fontSize:14}}>✕</button>
+            </div>
+          ))}
+          <button onClick={()=>sf("refs",[...refs,{name:"",url:""}])} style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"1px dashed #ddd",borderRadius:8,padding:"5px 10px",fontSize:11,color:"#aaa",cursor:"pointer",marginBottom:"1.1rem"}}>
+            <span style={{fontSize:16}}>+</span> Agregar link
+          </button>
+          <label style={lbS}>Link entregable</label>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:"1.5rem"}}>
+            <input value={form.link} onChange={e=>sf("link",e.target.value)} placeholder="https://..." style={{...inS,borderBottomColor:"#E8E4DE",flex:1}}/>
+            {form.link&&<a href={http(form.link)} target="_blank" rel="noreferrer" style={{fontSize:18,color:"#3A6FE8",textDecoration:"none"}}>↗</a>}
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"space-between",flexWrap:"wrap"}}>
+            <div style={{display:"flex",gap:8}}>
+              {isEdit&&<button onClick={()=>{delTask(modal.task.id);setModal(null);}} style={{background:"none",border:"1px solid #FFD0C8",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",color:"#E8623A"}}>Eliminar</button>}
+              {isEdit&&<button onClick={()=>dupTask(modal.task)} style={{background:"none",border:"1px solid #E8E4DE",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",color:"#666"}}>Duplicar</button>}
+            </div>
+            <div style={{display:"flex",gap:8,marginLeft:"auto"}}>
+              <button onClick={()=>setModal(null)} style={{background:"none",border:"1px solid #E8E4DE",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",color:"#666"}}>Cancelar</button>
+              <button onClick={saveModal} style={{background:form.color,border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,cursor:"pointer",color:textOn(form.color),fontWeight:600}}>{isEdit?"Guardar":"Agregar"}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const Settings=()=>(
     <div onClick={()=>setSettOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,width:540,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column"}}>
         <div style={{padding:"1.5rem 1.5rem 1rem",borderBottom:"1px solid #F0EDE8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -485,7 +471,7 @@ function Main({ session }) {
           <button onClick={()=>setSettOpen(false)} style={{background:"none",border:"1px solid #E8E4DE",borderRadius:10,width:34,height:34,cursor:"pointer",fontSize:16,color:"#999"}}>✕</button>
         </div>
         <div style={{display:"flex",gap:4,padding:"0.75rem 1.5rem",borderBottom:"1px solid #F0EDE8",flexWrap:"wrap"}}>
-          {[["marca","Marca"],["colores","Colores"],["tableros","Tableros"],["clientes","Clientes"],["acceso","Acceso"]].map(([t,l])=>(
+          {[["marca","Marca"],["colores","Colores"],["tableros","Tableros"],["clientes","Clientes"]].map(([t,l])=>(
             <button key={t} onClick={()=>setSettTab(t)} style={{background:settTab===t?brand.accent:"#F4F2EE",border:"none",borderRadius:20,padding:"5px 14px",fontSize:11,fontWeight:settTab===t?600:400,color:settTab===t?"#fff":"#888",cursor:"pointer"}}>{l}</button>
           ))}
         </div>
@@ -543,8 +529,7 @@ function Main({ session }) {
                 <div key={b.id} style={{border:"1px solid #F0EDE8",borderRadius:12,padding:"1rem",background:"#FAFAF9"}}>
                   <div style={{display:"flex",alignItems:"center",gap:"0.75rem",marginBottom:"0.75rem"}}>
                     <span style={{fontSize:16,color:b.accent}}>{b.icon}</span>
-                    <input key={b.id+b.label} defaultValue={b.label} onBlur={e=>updBoard(b.id,{label:e.target.value})}
-                      style={{flex:1,border:"none",borderBottom:`2px solid ${b.accent}`,fontSize:14,fontWeight:600,outline:"none",background:"transparent",color:"#1C1C1C",padding:"2px 0"}}/>
+                    <input key={b.id+b.label} defaultValue={b.label} onBlur={e=>updBoard(b.id,{label:e.target.value})} style={{flex:1,border:"none",borderBottom:`2px solid ${b.accent}`,fontSize:14,fontWeight:600,outline:"none",background:"transparent",color:"#1C1C1C",padding:"2px 0"}}/>
                     <div style={{position:"relative"}}>
                       <div style={{width:28,height:28,borderRadius:8,background:b.accent,cursor:"pointer"}} onClick={()=>document.getElementById(`pk-b-${b.id}`).click()}/>
                       <input id={`pk-b-${b.id}`} type="color" value={b.accent} onChange={e=>updBoard(b.id,{accent:e.target.value})} style={{position:"absolute",opacity:0,width:28,height:28,top:0,left:0}}/>
@@ -552,11 +537,8 @@ function Main({ session }) {
                   </div>
                   {members.filter(m=>m.board_id===b.id).map(m=>(
                     <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                      <div style={{width:22,height:22,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        <span style={{color:"#fff",fontSize:9,fontWeight:700}}>{(m.name||"?")[0]}</span>
-                      </div>
-                      <input key={m.id+m.name} defaultValue={m.name||""} onBlur={e=>updMember(m.id,{name:e.target.value})}
-                        style={{flex:1,border:"none",borderBottom:"1px solid #E8E4DE",fontSize:12,outline:"none",background:"transparent",color:"#555",padding:"2px 0"}}/>
+                      <div style={{width:22,height:22,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:9,fontWeight:700}}>{(m.name||"?")[0]}</span></div>
+                      <input key={m.id+m.name} defaultValue={m.name||""} onBlur={e=>updMember(m.id,{name:e.target.value})} style={{flex:1,border:"none",borderBottom:"1px solid #E8E4DE",fontSize:12,outline:"none",background:"transparent",color:"#555",padding:"2px 0"}}/>
                       <div style={{position:"relative"}}>
                         <div style={{width:20,height:20,borderRadius:6,background:m.color,cursor:"pointer"}} onClick={()=>document.getElementById(`pk-m-${m.id}`).click()}/>
                         <input id={`pk-m-${m.id}`} type="color" value={m.color} onChange={e=>updMember(m.id,{color:e.target.value})} style={{position:"absolute",opacity:0,width:20,height:20,top:0,left:0}}/>
@@ -574,15 +556,13 @@ function Main({ session }) {
           {settTab==="clientes"&&(
             <div style={{display:"flex",flexDirection:"column",gap:"0.75rem"}}>
               <div style={{display:"flex",gap:6,marginBottom:8}}>
-                <input value={newClient} onChange={e=>setNewClient(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addClient()}
-                  placeholder="Nombre del cliente..." style={{flex:1,border:"none",borderBottom:`2px solid ${brand.accent}`,padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C"}}/>
+                <input value={newClient} onChange={e=>setNewClient(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addClient()} placeholder="Nombre del cliente..." style={{flex:1,border:"none",borderBottom:`2px solid ${brand.accent}`,padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C"}}/>
                 <button onClick={addClient} style={{background:brand.accent,border:"none",borderRadius:8,color:textOn(brand.accent),fontSize:16,cursor:"pointer",width:32,fontWeight:700}}>+</button>
               </div>
               {clients.map(c=>(
                 <div key={c.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"#FAFAF9",border:"1px solid #F0EDE8",borderRadius:10}}>
                   <div style={{width:10,height:10,borderRadius:"50%",background:c.color}}/>
-                  <input key={c.id+c.name} defaultValue={c.name} onBlur={e=>updClient(c.id,{name:e.target.value})}
-                    style={{flex:1,border:"none",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C"}}/>
+                  <input key={c.id+c.name} defaultValue={c.name} onBlur={e=>updClient(c.id,{name:e.target.value})} style={{flex:1,border:"none",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C"}}/>
                   <div style={{position:"relative"}}>
                     <div style={{width:20,height:20,borderRadius:6,background:c.color,cursor:"pointer"}} onClick={()=>document.getElementById(`pk-c-${c.id}`).click()}/>
                     <input id={`pk-c-${c.id}`} type="color" value={c.color} onChange={e=>updClient(c.id,{color:e.target.value})} style={{position:"absolute",opacity:0,width:20,height:20,top:0,left:0}}/>
@@ -592,239 +572,17 @@ function Main({ session }) {
               ))}
             </div>
           )}
-          {settTab==="acceso"&&(
-            <div style={{display:"flex",flexDirection:"column",gap:"0.75rem"}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#FAFAF9",border:"1px solid #F0EDE8",borderRadius:10,marginBottom:8}}>
-                <div style={{width:32,height:32,borderRadius:"50%",background:"#E8623A",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <span style={{color:"#fff",fontSize:12,fontWeight:700}}>{session.user.email[0].toUpperCase()}</span>
-                </div>
-                <div>
-                  <p style={{fontSize:13,fontWeight:500,color:"#1C1C1C",margin:0}}>{session.user.user_metadata?.full_name||"Usuario"}</p>
-                  <p style={{fontSize:11,color:"#aaa",margin:0}}>{session.user.email}</p>
-                </div>
-                <button onClick={()=>supabase.auth.signOut()} style={{marginLeft:"auto",background:"none",border:"1px solid #FFD0C8",borderRadius:8,padding:"5px 12px",fontSize:11,color:"#E8623A",cursor:"pointer"}}>Cerrar sesión</button>
-              </div>
-              <UserManager/>
-            </div>
-          )}
         </div>
         <div style={{padding:"1rem 1.5rem",borderTop:"1px solid #F0EDE8",display:"flex",justifyContent:"flex-end"}}>
-          <button onClick={async()=>{await saveBrand(brand);setSettOpen(false);}} style={{background:brand.accent,border:"none",borderRadius:10,padding:"9px 22px",fontSize:13,color:textOn(brand.accent),cursor:"pointer",fontWeight:600}}>Guardar cambios</button>
+          <button onClick={async()=>{await saveBrand(brand);setSettOpen(false);}} style={{background:brand.accent,border:"none",borderRadius:10,padding:"9px 22px",fontSize:13,color:textOn(brand.accent),cursor:"pointer",fontWeight:600}}>Guardar</button>
         </div>
       </div>
     </div>
   );
 
-  // ── Task Modal ──
-  const Modal = () => {
-    const isEdit=modal.mode==="edit";
-    const refs=form.refs||[];
-    const ttype=form.is_recurring?"rec":form.end_date?"range":"normal";
-    return (
-      <div onClick={()=>setModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,backdropFilter:"blur(3px)"}}>
-        <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,padding:"1.75rem",width:520,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
-          {/* Header */}
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:"1rem"}}>
-            <div style={{width:14,height:14,borderRadius:"50%",background:form.color}}/>
-            <p style={{fontFamily:"'DM Serif Display',serif",fontSize:"1.15rem",color:"#1C1C1C",margin:0,flex:1}}>{isEdit?"Editar tarea":"Nueva tarea"}</p>
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <div style={{position:"relative"}}>
-                <div style={{width:32,height:32,borderRadius:8,background:form.color,cursor:"pointer",border:"2px solid #E8E4DE"}} onClick={()=>document.getElementById("pk-task").click()}/>
-                <input id="pk-task" type="color" value={form.color} onChange={e=>sf("color",e.target.value)} style={{position:"absolute",opacity:0,width:32,height:32,top:0,left:0}}/>
-              </div>
-              <input value={form.color} onChange={e=>sf("color",e.target.value)} maxLength={7}
-                style={{width:72,border:"1px solid #E8E4DE",borderRadius:6,padding:"4px 6px",fontSize:11,outline:"none",fontFamily:"monospace",color:"#555"}}/>
-            </div>
-          </div>
-
-          {/* Título */}
-          <label style={lbS}>Nombre</label>
-          <input ref={titleRef} value={form.title} onChange={e=>sf("title",e.target.value)}
-            placeholder="Nombre de la tarea..." style={{...inS,borderBottomColor:form.color,marginBottom:"1.1rem"}}/>
-
-          {/* Cliente */}
-          <label style={lbS}>Cliente / Negocio</label>
-          <select value={form.client_id} onChange={e=>sf("client_id",e.target.value)}
-            style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",marginBottom:"1.1rem",cursor:"pointer"}}>
-            <option value="">— Sin cliente —</option>
-            {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-
-          {/* Asignados */}
-          <label style={lbS}>Asignar a</label>
-          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
-            {members.map(m=>{
-              const sel=form.assignees.includes(m.id);
-              const brd=boards.find(b=>b.id===m.board_id);
-              return (
-                <button key={m.id} onClick={()=>toggleA(m.id)}
-                  style={{display:"flex",alignItems:"center",gap:5,background:sel?m.color:"#F4F2EE",border:`1.5px solid ${sel?m.color:"transparent"}`,borderRadius:20,padding:"4px 10px",cursor:"pointer"}}>
-                  <div style={{width:16,height:16,borderRadius:"50%",background:sel?"rgba(255,255,255,0.3)":m.color,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <span style={{color:"#fff",fontSize:8,fontWeight:700}}>{(m.name||"?")[0]}</span>
-                  </div>
-                  <span style={{fontSize:11,color:sel?textOn(m.color):"#555",fontWeight:sel?600:400}}>{m.name}</span>
-                  {brd&&<span style={{fontSize:9,color:sel?textOn(m.color)+"99":"#aaa"}}>({brd.label})</span>}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Horario por persona */}
-          {form.schedules.length>0&&!form.is_recurring&&(
-            <div style={{background:"#FAFAF9",border:"1px solid #E8E4DE",borderRadius:10,padding:"10px 12px",marginBottom:"1.1rem"}}>
-              <p style={{fontSize:9,color:"#aaa",textTransform:"uppercase",letterSpacing:1,margin:"0 0 8px",fontWeight:500}}>Horario por persona</p>
-              {form.schedules.map(s=>{ const m=mOf(s.memberId); if(!m)return null; return (
-                <div key={s.memberId} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                  <div style={{width:18,height:18,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <span style={{color:"#fff",fontSize:8,fontWeight:700}}>{m.name[0]}</span>
-                  </div>
-                  <span style={{fontSize:11,color:"#555",width:60}}>{m.name}</span>
-                  <input type="date" value={s.date||""} onChange={e=>updSch(s.memberId,"date",e.target.value)}
-                    style={{flex:1,border:"none",borderBottom:"1px solid #E8E4DE",padding:"3px 0",fontSize:11,outline:"none",background:"transparent",color:"#1C1C1C"}}/>
-                  <select value={s.hour||HOURS[0]} onChange={e=>updSch(s.memberId,"hour",e.target.value)}
-                    style={{border:"none",borderBottom:"1px solid #E8E4DE",padding:"3px 0",fontSize:11,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer"}}>
-                    {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
-                  </select>
-                </div>
-              );})}
-            </div>
-          )}
-
-          {/* Tipo */}
-          <label style={lbS}>Tipo de tarea</label>
-          <div style={{display:"flex",gap:8,marginBottom:"1.1rem"}}>
-            {[["normal","Normal","—"],["rec","Recurrente","↻"],["range","Rango","↔"]].map(([t,l,ic])=>{
-              const a=ttype===t;
-              return (
-                <button key={t} onClick={()=>{ if(t==="rec")setForm(p=>({...p,is_recurring:true,end_date:""})); else if(t==="range")setForm(p=>({...p,is_recurring:false,end_date:p.end_date||""})); else setForm(p=>({...p,is_recurring:false,end_date:""})); }}
-                  style={{flex:1,background:a?"#F4F2EE":"transparent",border:`1.5px solid ${a?form.color:"#E8E4DE"}`,borderRadius:8,padding:"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                  <span style={{fontSize:18,fontWeight:300,color:a?form.color:"#bbb"}}>{ic}</span>
-                  <span style={{fontSize:10,fontWeight:a?600:400,color:a?"#1C1C1C":"#999"}}>{l}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Recurrencia */}
-          {form.is_recurring&&(
-            <div style={{background:"#F0F7FF",border:"1px solid #B5D4F4",borderRadius:10,padding:"10px 12px",marginBottom:"1.1rem"}}>
-              <p style={{fontSize:9,color:"#3A6FE8",textTransform:"uppercase",letterSpacing:1,margin:"0 0 8px",fontWeight:500}}>Días</p>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-                {REC_DAYS.map(d=>{ const s=(form.rec_days||[]).includes(d); return (
-                  <button key={d} onClick={()=>{ const ds=form.rec_days||[]; sf("rec_days",ds.includes(d)?ds.filter(x=>x!==d):[...ds,d]); }}
-                    style={{background:s?form.color:"#fff",border:`1px solid ${s?form.color:"#E8E4DE"}`,borderRadius:20,padding:"3px 10px",fontSize:11,cursor:"pointer",color:s?textOn(form.color):"#666"}}>{d}</button>
-                );})}
-              </div>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{fontSize:11,color:"#555"}}>Hora:</span>
-                <select value={form.hour||HOURS[0]} onChange={e=>sf("hour",e.target.value)}
-                  style={{border:"none",borderBottom:"1px solid #B5D4F4",padding:"3px 0",fontSize:12,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer"}}>
-                  {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Fechas */}
-          {!form.is_recurring&&(
-            <div style={{display:"flex",gap:12,marginBottom:"1.1rem"}}>
-              <div style={{flex:1}}>
-                <label style={lbS}>Fecha inicio</label>
-                <input type="date" value={form.date||""} onChange={e=>{ const v=e.target.value; setForm(p=>({...p,date:v,schedules:p.schedules.map(s=>({...s,date:v}))})); }}
-                  style={{...inS,borderBottomColor:"#E8E4DE",fontSize:13}}/>
-              </div>
-              <div style={{flex:1}}>
-                <label style={lbS}>Fecha fin <span style={{color:"#bbb",fontWeight:400}}>(opcional)</span></label>
-                <input type="date" value={form.end_date||""} onChange={e=>sf("end_date",e.target.value)}
-                  style={{...inS,borderBottomColor:"#E8E4DE",fontSize:13}}/>
-              </div>
-              {!form.end_date&&(
-                <div style={{flex:1}}>
-                  <label style={lbS}>Hora</label>
-                  <select value={form.hour||HOURS[0]} onChange={e=>{ const v=e.target.value; setForm(p=>({...p,hour:v,schedules:p.schedules.map(s=>({...s,hour:v}))})); }}
-                    style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer"}}>
-                    {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
-                  </select>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Duración */}
-          {!form.end_date&&!form.is_recurring&&(
-            <>
-              <label style={lbS}>Duración (horas)</label>
-              <select value={form.duration||1} onChange={e=>sf("duration",parseInt(e.target.value))}
-                style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer",marginBottom:"1.1rem"}}>
-                {[1,2,3,4,5,6,7,8].map(h=><option key={h} value={h}>{h}h</option>)}
-              </select>
-            </>
-          )}
-
-          {/* Estado */}
-          <label style={lbS}>Estado</label>
-          <div style={{display:"flex",gap:6,marginBottom:"1.1rem"}}>
-            {STATUSES.map(s=>(
-              <button key={s.value} onClick={()=>sf("status",s.value)}
-                style={{flex:1,background:form.status===s.value?s.bg:"#F4F2EE",border:`1.5px solid ${form.status===s.value?s.color:"transparent"}`,borderRadius:8,padding:"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                <div style={{width:7,height:7,borderRadius:"50%",background:s.color}}/>
-                <span style={{fontSize:10,fontWeight:form.status===s.value?600:400,color:form.status===s.value?s.color:"#999"}}>{s.label}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Comentarios */}
-          <label style={lbS}>Instrucciones</label>
-          <textarea value={form.comments} onChange={e=>sf("comments",e.target.value)} placeholder="Instrucciones para el equipo..."
-            style={{width:"100%",border:"1px solid #E8E4DE",borderRadius:10,padding:"10px 12px",fontSize:13,outline:"none",background:"#FAFAF9",color:"#1C1C1C",resize:"vertical",minHeight:80,fontFamily:"'DM Sans',sans-serif",marginBottom:"1.1rem",boxSizing:"border-box"}}/>
-
-          {/* Links referencia */}
-          <label style={lbS}>Links de referencia</label>
-          {refs.map((r,i)=>(
-            <div key={i} style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
-              <input value={r.name||""} onChange={e=>{ const a=[...refs]; a[i]={...a[i],name:e.target.value}; sf("refs",a); }}
-                placeholder="Nombre" style={{width:120,border:"none",borderBottom:"1px solid #E8E4DE",fontSize:12,outline:"none",background:"transparent",color:"#1C1C1C",padding:"4px 0"}}/>
-              <input value={r.url||""} onChange={e=>{ const a=[...refs]; a[i]={...a[i],url:e.target.value}; sf("refs",a); }}
-                placeholder="https://..." style={{flex:1,border:"none",borderBottom:"1px solid #E8E4DE",fontSize:12,outline:"none",background:"transparent",color:"#1C1C1C",padding:"4px 0"}}/>
-              {r.url&&<a href={http(r.url)} target="_blank" rel="noreferrer" style={{fontSize:14,color:"#3A6FE8",textDecoration:"none"}}>↗</a>}
-              <button onClick={()=>sf("refs",refs.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#ccc",cursor:"pointer",fontSize:14}}>✕</button>
-            </div>
-          ))}
-          <button onClick={()=>sf("refs",[...refs,{name:"",url:""}])}
-            style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"1px dashed #ddd",borderRadius:8,padding:"5px 10px",fontSize:11,color:"#aaa",cursor:"pointer",marginBottom:"1.1rem"}}>
-            <span style={{fontSize:16}}>+</span> Agregar link
-          </button>
-
-          {/* Link entregable */}
-          <label style={lbS}>Link entregable <span style={{color:"#bbb",fontWeight:400}}>(opcional)</span></label>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:"1.5rem"}}>
-            <input value={form.link} onChange={e=>sf("link",e.target.value)} placeholder="https://..."
-              style={{...inS,borderBottomColor:"#E8E4DE",flex:1}}/>
-            {form.link&&<a href={http(form.link)} target="_blank" rel="noreferrer" style={{fontSize:18,color:"#3A6FE8",textDecoration:"none"}}>↗</a>}
-          </div>
-
-          {/* Botones */}
-          <div style={{display:"flex",gap:8,justifyContent:"space-between",flexWrap:"wrap"}}>
-            <div style={{display:"flex",gap:8}}>
-              {isEdit&&<button onClick={()=>{delTask(modal.task.id);setModal(null);}} style={{background:"none",border:"1px solid #FFD0C8",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",color:"#E8623A"}}>Eliminar</button>}
-              {isEdit&&<button onClick={()=>dupTask(modal.task)} style={{background:"none",border:"1px solid #E8E4DE",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",color:"#666"}}>Duplicar</button>}
-            </div>
-            <div style={{display:"flex",gap:8,marginLeft:"auto"}}>
-              <button onClick={()=>setModal(null)} style={{background:"none",border:"1px solid #E8E4DE",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",color:"#666"}}>Cancelar</button>
-              <button onClick={saveModal} style={{background:form.color,border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,cursor:"pointer",color:textOn(form.color),fontWeight:600}}>{isEdit?"Guardar":"Agregar"}</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ── Render ──
-  return (
+  return(
     <div style={{display:"flex",height:"100vh",background:"#F4F2EE",fontFamily:"'DM Sans',sans-serif",overflow:"hidden"}}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
-
-      {/* Nav */}
       <div style={{width:64,background:brand.navBg,display:"flex",flexDirection:"column",alignItems:"center",paddingTop:14,gap:4,zIndex:20,flexShrink:0}}>
         <div style={{width:38,height:38,borderRadius:10,background:brand.logo?"transparent":brand.accent,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,overflow:"hidden"}}>
           {brand.logo?<img src={brand.logo} alt="logo" style={{width:"100%",height:"100%",objectFit:"contain"}}/>:<span style={{color:textOn(brand.accent),fontSize:12,fontWeight:700}}>{brand.name.slice(0,2).toUpperCase()}</span>}
@@ -840,7 +598,6 @@ function Main({ session }) {
         <button onClick={()=>setSideOpen(o=>!o)} style={{width:44,height:44,borderRadius:12,border:"none",cursor:"pointer",background:"transparent",color:"#555",fontSize:18,marginBottom:12}}>☰</button>
       </div>
 
-      {/* Sidebar */}
       {sideOpen&&board&&(
         <div style={{width:270,background:brand.sideBg,display:"flex",flexDirection:"column",zIndex:10,flexShrink:0}}>
           <div style={{padding:"1.1rem 1rem 0.75rem",borderBottom:"1px solid #2a2a2a"}}>
@@ -863,8 +620,7 @@ function Main({ session }) {
             </div>
           </div>
           <div style={{padding:"0.5rem 1rem",borderBottom:"1px solid #2a2a2a"}}>
-            <select value={fClient} onChange={e=>setFClient(e.target.value)}
-              style={{width:"100%",background:"#2a2a2a",border:"none",borderRadius:8,color:"#bbb",fontSize:11,padding:"5px 8px",outline:"none",cursor:"pointer"}}>
+            <select value={fClient} onChange={e=>setFClient(e.target.value)} style={{width:"100%",background:"#2a2a2a",border:"none",borderRadius:8,color:"#bbb",fontSize:11,padding:"5px 8px",outline:"none",cursor:"pointer"}}>
               <option value="">Todos los clientes</option>
               {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -872,26 +628,20 @@ function Main({ session }) {
           <SideTasks/>
           <div style={{padding:"0.5rem 1rem",borderTop:"1px solid #2a2a2a",display:"flex",flexDirection:"column",gap:6}}>
             <div style={{display:"flex",gap:6}}>
-              <input value={quick} onChange={e=>setQuick(e.target.value)} onKeyDown={e=>e.key==="Enter"&&quickAdd()}
-                placeholder="Tarea rápida..." style={{flex:1,background:"#2a2a2a",border:"none",borderRadius:8,color:"#F4F2EE",fontSize:11,padding:"6px 8px",outline:"none"}}/>
+              <input value={quick} onChange={e=>setQuick(e.target.value)} onKeyDown={e=>e.key==="Enter"&&quickAdd()} placeholder="Tarea rápida..." style={{flex:1,background:"#2a2a2a",border:"none",borderRadius:8,color:"#F4F2EE",fontSize:11,padding:"6px 8px",outline:"none"}}/>
               <button onClick={quickAdd} style={{background:brand.accent,border:"none",borderRadius:8,color:textOn(brand.accent),fontSize:16,cursor:"pointer",width:28,fontWeight:700}}>+</button>
             </div>
-            <button onClick={()=>openAdd(null,"","")} style={{width:"100%",background:"transparent",border:`1px solid ${brand.accent}55`,borderRadius:8,color:brand.accent,fontSize:11,cursor:"pointer",padding:"6px",fontWeight:500}}>
-              + Nueva tarea completa
-            </button>
+            <button onClick={()=>openAdd(null,"","")} style={{width:"100%",background:"transparent",border:`1px solid ${brand.accent}55`,borderRadius:8,color:brand.accent,fontSize:11,cursor:"pointer",padding:"6px",fontWeight:500}}>+ Nueva tarea completa</button>
           </div>
         </div>
       )}
 
-      {/* Main */}
       {board&&(
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-          {/* Topbar */}
           <div style={{background:brand.topBg,borderBottom:"1px solid #E8E4DE",padding:"0.6rem 1.25rem",display:"flex",alignItems:"center",gap:"0.75rem",flexWrap:"wrap"}}>
             <div style={{display:"flex",gap:6}}>
               {boards.map(b=>(
-                <button key={b.id} onClick={()=>setBoardId(b.id)}
-                  style={{display:"flex",alignItems:"center",gap:5,background:boardId===b.id?b.accent:"#F4F2EE",border:"none",borderRadius:20,padding:"5px 12px",cursor:"pointer"}}>
+                <button key={b.id} onClick={()=>setBoardId(b.id)} style={{display:"flex",alignItems:"center",gap:5,background:boardId===b.id?b.accent:"#F4F2EE",border:"none",borderRadius:20,padding:"5px 12px",cursor:"pointer"}}>
                   <span style={{fontSize:11,color:boardId===b.id?textOn(b.accent):"#888"}}>{b.icon}</span>
                   <span style={{fontSize:11,fontWeight:boardId===b.id?600:400,color:boardId===b.id?textOn(b.accent):"#888"}}>{b.label}</span>
                 </button>
@@ -927,13 +677,12 @@ function Main({ session }) {
             <button onClick={()=>setSettOpen(true)} style={{...iBtnS,background:brand.accent+"18",borderRadius:8,border:`1px solid ${brand.accent}55`,color:brand.accent,fontSize:12,padding:"4px 10px",fontWeight:500}}>⚙ Personalizar</button>
           </div>
 
-          {/* Weekly */}
           {view==="weekly"&&(
             <div style={{flex:1,overflowY:"auto",padding:"1rem"}}>
               {bMems.map(m=>{
                 const mt=mTasks(m.id).filter(t=>fClient?t.client_id===fClient:true);
                 const wc=mt.filter(t=>wDates.some(d=>taskOccursOn(t,toISO(d)))).length;
-                return (
+                return(
                   <div key={m.id} style={{marginBottom:"1.5rem"}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"0 4px"}}>
                       <div style={{width:22,height:22,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -945,9 +694,8 @@ function Main({ session }) {
                     <div style={{display:"grid",gridTemplateColumns:"52px repeat(5,1fr)",border:"1px solid #E8E4DE",borderRadius:12,overflow:"hidden",background:"#fff"}}>
                       <div style={{padding:"5px 6px",background:"#FAFAF9"}}/>
                       {wDates.map((d,i)=>{
-                        const isT=toISO(d)===toISO(today);
-                        const hol=isHol(d);
-                        return (
+                        const isT=toISO(d)===toISO(today);const hol=isHol(d);
+                        return(
                           <div key={i} style={{padding:"5px 6px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:hol?"#FFF0F5":isT?m.color+"15":"#FAFAF9",borderLeft:"1px solid #E8E4DE"}}>
                             <span style={{fontSize:9,color:hol?"#E06B9A":"#bbb"}}>{WEEK_DAYS[i]}</span>
                             <span style={{fontSize:13,color:hol?"#E06B9A":isT?m.color:"#1C1C1C",fontWeight:isT?700:400}}>{d.getDate()}</span>
@@ -963,13 +711,10 @@ function Main({ session }) {
                             const ct=mt.filter(t=>{
                               if(!taskOccursOn(t,iso))return false;
                               const sch=getMSch(t,m.id);
-                              return (sch.hour||HOURS[0])===hour;
+                              return(sch.hour||HOURS[0])===hour;
                             });
-                            return (
-                              <div key={di}
-                                onDragOver={e=>e.preventDefault()}
-                                onDrop={e=>onDrop(e,m.id,iso,hour)}
-                                onClick={()=>ct.length===0&&openAdd(m.id,iso,hour)}
+                            return(
+                              <div key={di} onDragOver={e=>e.preventDefault()} onDrop={e=>onDrop(e,m.id,iso,hour)} onClick={()=>ct.length===0&&openAdd(m.id,iso,hour)}
                                 style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:ct.length===0?"pointer":"default"}}>
                                 {ct.map(t=><TBlock key={t.id} t={t}/>)}
                               </div>
@@ -984,17 +729,12 @@ function Main({ session }) {
             </div>
           )}
 
-          {/* Monthly */}
           {view==="monthly"&&(()=>{
             const dim=getDIM(cYear,cMonth),fd=getFD(cYear,cMonth);
-            const cells=[];
-            for(let i=0;i<fd;i++)cells.push(null);
-            for(let d=1;d<=dim;d++)cells.push(d);
-            while(cells.length%7!==0)cells.push(null);
-            const weeks=[];
-            for(let i=0;i<cells.length;i+=7)weeks.push(cells.slice(i,i+7));
+            const cells=[];for(let i=0;i<fd;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(d);while(cells.length%7!==0)cells.push(null);
+            const weeks=[];for(let i=0;i<cells.length;i+=7)weeks.push(cells.slice(i,i+7));
             const allT=bTasks().filter(t=>fClient?t.client_id===fClient:true);
-            return (
+            return(
               <div style={{flex:1,overflowY:"auto",padding:"1rem"}}>
                 <div style={{minWidth:700}}>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
@@ -1008,29 +748,24 @@ function Main({ session }) {
                         const hol=dateObj?isHol(dateObj):null;
                         const iso=dateObj?toISO(dateObj):null;
                         const dt=iso?allT.filter(t=>taskOccursOn(t,iso)):[];
-                        return (
-                          <div key={di}
-                            onDragOver={e=>{if(day)e.preventDefault();}}
-                            onDrop={e=>{if(iso)onDrop(e,bMems[0]?.id,iso,"8:00");}}
+                        return(
+                          <div key={di} onDragOver={e=>{if(day)e.preventDefault();}} onDrop={e=>{if(iso)onDrop(e,bMems[0]?.id,iso,"8:00");}}
                             style={{background:day?(hol?"#FFF5F5":"#fff"):"transparent",border:isT?`2px solid ${board.accent}`:day?"1px solid #E8E4DE":"none",borderRadius:10,minHeight:100,padding:5}}>
                             {day&&<>
                               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:3}}>
                                 <span style={{fontSize:11,fontWeight:isT?700:400,color:isT?board.accent:hol?"#E06B9A":"#aaa"}}>{day}</span>
                                 {hol&&<span style={{fontSize:9,color:"#E06B9A"}} title={hol}>🇨🇴</span>}
                               </div>
-                              {dt.map(t=>{
-                                const cl=cOf(t.client_id);
-                                return (
-                                  <div key={t.id} draggable onDragStart={e=>onDragStart(e,t)} onDoubleClick={()=>openEdit(t)}
-                                    style={{background:t.color||"#E8623A",borderRadius:4,padding:"2px 5px",fontSize:9,color:textOn(t.color||"#E8623A"),marginBottom:2,cursor:"pointer",overflow:"hidden"}}>
-                                    <div style={{display:"flex",alignItems:"center",gap:3}}>
-                                      <span style={{flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{t.title}</span>
-                                      {t.link&&<span>🔗</span>}
-                                    </div>
-                                    {cl&&<div style={{fontSize:8,opacity:0.85}}>{cl.name}</div>}
+                              {dt.map(t=>{const cl=cOf(t.client_id);return(
+                                <div key={t.id} draggable onDragStart={e=>onDragStart(e,t)} onDoubleClick={()=>openEdit(t)}
+                                  style={{background:t.color||"#E8623A",borderRadius:4,padding:"2px 5px",fontSize:9,color:textOn(t.color||"#E8623A"),marginBottom:2,cursor:"pointer",overflow:"hidden"}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:3}}>
+                                    <span style={{flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{t.title}</span>
+                                    {t.link&&<span>🔗</span>}
                                   </div>
-                                );
-                              })}
+                                  {cl&&<div style={{fontSize:8,opacity:0.85}}>{cl.name}</div>}
+                                </div>
+                              );})}
                             </>}
                           </div>
                         );
@@ -1051,41 +786,8 @@ function Main({ session }) {
           })()}
         </div>
       )}
-
       {settOpen&&<Settings/>}
       {modal&&<Modal/>}
-    </div>
-  );
-}
-
-// ── User Manager ──────────────────────────────────────────────────────────────
-function UserManager() {
-  const [email, setEmail] = useState("");
-  const [msg, setMsg]     = useState("");
-  const [users, setUsers] = useState([]);
-  useEffect(()=>{ supabase.from("allowed_users").select("*").order("created_at").then(({data})=>data&&setUsers(data)); },[]);
-  const add = async () => {
-    if (!email.trim()) return;
-    const { error } = await supabase.from("allowed_users").insert({ email:email.trim().toLowerCase() });
-    if (error) setMsg("Error: correo ya existe.");
-    else { setMsg(`✓ ${email} agregado`); setEmail(""); supabase.from("allowed_users").select("*").order("created_at").then(({data})=>data&&setUsers(data)); }
-    setTimeout(()=>setMsg(""),3000);
-  };
-  const del = async id => { await supabase.from("allowed_users").delete().eq("id",id); setUsers(p=>p.filter(u=>u.id!==id)); };
-  return (
-    <div>
-      <div style={{display:"flex",gap:6,marginBottom:8}}>
-        <input value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}
-          placeholder="correo@ejemplo.com" style={{flex:1,border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C"}}/>
-        <button onClick={add} style={{background:"#E8623A",border:"none",borderRadius:8,color:"#fff",fontSize:13,cursor:"pointer",padding:"6px 14px",fontWeight:600}}>Agregar</button>
-      </div>
-      {msg&&<p style={{fontSize:11,color:msg.startsWith("✓")?"#3A9E8A":"#E8623A",marginBottom:8}}>{msg}</p>}
-      {users.map(u=>(
-        <div key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:"#FAFAF9",border:"1px solid #F0EDE8",borderRadius:8,marginBottom:4}}>
-          <span style={{fontSize:12,color:"#555",flex:1}}>{u.email}</span>
-          <button onClick={()=>del(u.id)} style={{background:"none",border:"none",color:"#ccc",fontSize:12,cursor:"pointer"}}>✕</button>
-        </div>
-      ))}
     </div>
   );
 }
