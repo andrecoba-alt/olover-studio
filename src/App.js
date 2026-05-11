@@ -6,7 +6,6 @@ const STATUSES = [
   { value: "asignada",  label: "Asignada",  color: "#3A9E8A", bg: "#E8F7F5" },
   { value: "terminada", label: "Terminada", color: "#7B6BE0", bg: "#F2F0FD" },
 ];
-const statusMeta = v => STATUSES.find(s => s.value === v) || STATUSES[0];
 
 const PRESETS = [
   { name:"OLOVER",   navBg:"#111111", sidebarBg:"#1C1C1C", topbarBg:"#ffffff", accent:"#E8623A" },
@@ -35,19 +34,19 @@ const luminance  = h => { try { const r=parseInt(h.slice(1,3),16)/255,g=parseInt
 const textOn     = bg => luminance(bg||"#fff")>0.5?"#1C1C1C":"#ffffff";
 const ensureHttp = url => url&&!url.startsWith("http")?`https://${url}`:url;
 
-// Check if a task occurs on a given fmtDate string
 const taskOccursOn = (task, dk) => {
   if (!dk) return false;
-  if (task.is_recurring && task.recurrence_days && task.recurrence_days.length > 0) {
-    const parts = dk.split("-");
-    const d = new Date(parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]));
+  if (task.is_recurring && task.recurrence_days && task.recurrence_days.length>0) {
+    const p=dk.split("-");
+    const d=new Date(parseInt(p[0]),parseInt(p[1]),parseInt(p[2]));
     return task.recurrence_days.includes(WEEK_DAYS_FULL[d.getDay()]);
   }
   if (task.end_date && task.date) {
-    const toNum = s => { const p=s.split("-"); return new Date(parseInt(p[0]),parseInt(p[1]),parseInt(p[2])).getTime(); };
-    return toNum(dk) >= toNum(task.date) && toNum(dk) <= toNum(task.end_date.includes("T")?fmtDate(new Date(task.end_date)):task.end_date);
+    const toMs = s => { const p=s.split("-"); return new Date(parseInt(p[0]),parseInt(p[1]),parseInt(p[2])).getTime(); };
+    const endStr = task.end_date.includes("T")?fmtDate(new Date(task.end_date)):task.end_date;
+    return toMs(dk)>=toMs(task.date)&&toMs(dk)<=toMs(endStr);
   }
-  return task.date === dk;
+  return task.date===dk;
 };
 
 let _id = Date.now();
@@ -60,7 +59,103 @@ const iBtnS= { background:"none", border:"none", fontSize:17, cursor:"pointer", 
 
 const EMPTY_FORM = { title:"", link:"", status:"pendiente", comments:"", client_id:"", color:"#E8623A", duration:1, assignees:[], assigneeSchedules:[], reference_links:[], is_recurring:false, recurrence_days:[], end_date:"", date:"", hour:HOURS[0] };
 
+// ── Login Screen ──────────────────────────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  const handleGoogle = async () => {
+    setLoading(true); setError("");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin }
+    });
+    if (error) { setError("Error al iniciar sesión. Intentá de nuevo."); setLoading(false); }
+  };
+
+  return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",fontFamily:"'DM Sans',sans-serif"}}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
+      <div style={{background:"#fff",borderRadius:20,padding:"3rem 2.5rem",width:380,boxShadow:"0 20px 60px rgba(0,0,0,0.1)",textAlign:"center"}}>
+        <div style={{width:56,height:56,borderRadius:14,background:"#E8623A",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 1.5rem"}}>
+          <span style={{color:"#fff",fontSize:20,fontWeight:700}}>OL</span>
+        </div>
+        <p style={{fontSize:9,letterSpacing:3,color:"#bbb",textTransform:"uppercase",marginBottom:6}}>OLOVER Studio</p>
+        <p style={{fontFamily:"'DM Serif Display',serif",fontSize:"1.6rem",color:"#1C1C1C",marginBottom:"0.5rem"}}>Crono</p>
+        <p style={{fontSize:13,color:"#aaa",marginBottom:"2rem"}}>Gestión de proyectos y equipo</p>
+        {error && <p style={{fontSize:12,color:"#E8623A",marginBottom:"1rem",background:"#FFF0ED",borderRadius:8,padding:"8px 12px"}}>{error}</p>}
+        <button onClick={handleGoogle} disabled={loading}
+          style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:10,background:loading?"#f5f5f5":"#fff",border:"1.5px solid #E8E4DE",borderRadius:12,padding:"12px 20px",cursor:loading?"not-allowed":"pointer",fontSize:14,fontWeight:500,color:"#333",transition:"all 0.15s"}}>
+          <svg width="18" height="18" viewBox="0 0 18 18">
+            <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
+            <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
+            <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18z"/>
+            <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
+          </svg>
+          {loading ? "Entrando..." : "Entrar con Google"}
+        </button>
+        <p style={{fontSize:11,color:"#ccc",marginTop:"1.5rem"}}>Solo usuarios autorizados pueden acceder</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
+  const [session, setSession]       = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
+
+  // Auth state
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        const { data } = await supabase.from("allowed_users").select("email").eq("email", session.user.email).single();
+        if (data) { setSession(session); }
+        else { setAccessDenied(true); await supabase.auth.signOut(); }
+      }
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session) {
+        const { data } = await supabase.from("allowed_users").select("email").eq("email", session.user.email).single();
+        if (data) { setSession(session); setAccessDenied(false); }
+        else { setAccessDenied(true); await supabase.auth.signOut(); setSession(null); }
+      } else {
+        setSession(null);
+      }
+      setAuthLoading(false);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (authLoading) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",flexDirection:"column",gap:12}}>
+      <div style={{width:40,height:40,borderRadius:10,background:"#E8623A",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <span style={{color:"#fff",fontSize:14,fontWeight:700}}>OL</span>
+      </div>
+      <p style={{fontSize:13,color:"#aaa",fontFamily:"'DM Sans',sans-serif"}}>Cargando...</p>
+    </div>
+  );
+
+  if (accessDenied) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",fontFamily:"'DM Sans',sans-serif"}}>
+      <div style={{background:"#fff",borderRadius:20,padding:"3rem 2.5rem",width:380,textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.1)"}}>
+        <p style={{fontSize:32,marginBottom:"1rem"}}>🔒</p>
+        <p style={{fontFamily:"'DM Serif Display',serif",fontSize:"1.3rem",color:"#1C1C1C",marginBottom:"0.5rem"}}>Acceso denegado</p>
+        <p style={{fontSize:13,color:"#aaa",marginBottom:"1.5rem"}}>Tu correo no está autorizado para acceder a Crono.</p>
+        <button onClick={()=>supabase.auth.signOut()} style={{background:"#E8623A",border:"none",borderRadius:10,padding:"10px 20px",fontSize:13,color:"#fff",cursor:"pointer",fontWeight:600}}>Volver al inicio</button>
+      </div>
+    </div>
+  );
+
+  if (!session) return <LoginScreen />;
+
+  return <MainApp session={session} />;
+}
+
+// ── Main App (authenticated) ──────────────────────────────────────────────────
+function MainApp({ session }) {
   const [brand, setBrand]     = useState({ name:"OLOVER Studio", logo:null, navBg:"#111111", sidebarBg:"#1C1C1C", topbarBg:"#ffffff", accent:"#E8623A" });
   const [boards, setBoards]   = useState([]);
   const [members, setMembers] = useState([]);
@@ -88,27 +183,25 @@ export default function App() {
   const [calYears, setCalYears]     = useState({ animadores:today.getFullYear(), disenadores:today.getFullYear(), proveedores:today.getFullYear() });
   const [calMonths, setCalMonths]   = useState({ animadores:today.getMonth(), disenadores:today.getMonth(), proveedores:today.getMonth() });
 
-  // ── Holidays ──
   useEffect(() => {
     const fetchHolidays = async (year) => {
       try {
         const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/CO`);
         const data = await res.json();
         const map = {};
-        data.forEach(h => { map[h.date] = h.localName || h.name; });
-        setHolidays(p => ({ ...p, [year]: map }));
+        data.forEach(h => { map[h.date] = h.localName||h.name; });
+        setHolidays(p=>({...p,[year]:map}));
       } catch(e) {}
     };
     fetchHolidays(today.getFullYear());
-    fetchHolidays(today.getFullYear() + 1);
+    fetchHolidays(today.getFullYear()+1);
   }, []);
 
   const isHoliday = (dateObj) => {
     const iso = fmtDateISO(dateObj);
-    return holidays[dateObj.getFullYear()]?.[iso] || null;
+    return holidays[dateObj.getFullYear()]?.[iso]||null;
   };
 
-  // ── Load ──
   useEffect(() => {
     async function load() {
       const [{ data:br },{ data:bo },{ data:me },{ data:ta },{ data:as },{ data:cl }] = await Promise.all([
@@ -119,7 +212,7 @@ export default function App() {
         supabase.from("task_assignments").select("*"),
         supabase.from("clients").select("*").order("position"),
       ]);
-      if (br) setBrand({ name:br.name, logo:br.logo, navBg:br.nav_bg, sidebarBg:br.sidebar_bg, topbarBg:br.topbar_bg, accent:br.accent });
+      if (br) setBrand({name:br.name,logo:br.logo,navBg:br.nav_bg,sidebarBg:br.sidebar_bg,topbarBg:br.topbar_bg,accent:br.accent});
       if (bo) setBoards(bo);
       if (me) setMembers(me);
       if (ta) setTasks(ta);
@@ -129,62 +222,60 @@ export default function App() {
     }
     load();
 
-    const reload = (table, setter, query) =>
+    const reload = (table,setter,query) =>
       supabase.channel(`rt-${table}-${Math.random()}`).on("postgres_changes",{event:"*",schema:"public",table},()=>query().then(({data})=>data&&setter(data))).subscribe();
 
-    const c1 = reload("tasks",            setTasks,       ()=>supabase.from("tasks").select("*").order("created_at"));
-    const c2 = reload("task_assignments", setAssignments, ()=>supabase.from("task_assignments").select("*"));
-    const c3 = reload("members",          setMembers,     ()=>supabase.from("members").select("*").order("position"));
-    const c4 = reload("boards",           setBoards,      ()=>supabase.from("boards").select("*").order("position"));
-    const c5 = reload("clients",          setClients,     ()=>supabase.from("clients").select("*").order("position"));
-    const c6 = supabase.channel("rt-brand-x").on("postgres_changes",{event:"*",schema:"public",table:"brand"},()=>
+    const c1=reload("tasks",setTasks,()=>supabase.from("tasks").select("*").order("created_at"));
+    const c2=reload("task_assignments",setAssignments,()=>supabase.from("task_assignments").select("*"));
+    const c3=reload("members",setMembers,()=>supabase.from("members").select("*").order("position"));
+    const c4=reload("boards",setBoards,()=>supabase.from("boards").select("*").order("position"));
+    const c5=reload("clients",setClients,()=>supabase.from("clients").select("*").order("position"));
+    const c6=supabase.channel("rt-brand-x").on("postgres_changes",{event:"*",schema:"public",table:"brand"},()=>
       supabase.from("brand").select("*").single().then(({data})=>data&&setBrand({name:data.name,logo:data.logo,navBg:data.nav_bg,sidebarBg:data.sidebar_bg,topbarBg:data.topbar_bg,accent:data.accent}))).subscribe();
-    return () => [c1,c2,c3,c4,c5,c6].forEach(c=>supabase.removeChannel(c));
+    return ()=>[c1,c2,c3,c4,c5,c6].forEach(c=>supabase.removeChannel(c));
   }, []);
 
   useEffect(() => {
-    if (modal && titleRef.current) setTimeout(() => titleRef.current?.focus(), 50);
+    if (modal&&titleRef.current) setTimeout(()=>titleRef.current?.focus(),50);
   }, [modal]);
 
-  // ── Derived ──
-  const board        = boards.find(b=>b.id===boardId) || boards[0];
+  const board        = boards.find(b=>b.id===boardId)||boards[0];
   const boardMembers = members.filter(m=>m.board_id===boardId);
 
   const taskAssignees = useCallback((taskId) => {
-    const ids = assignments.filter(a=>a.task_id===taskId).map(a=>a.member_id);
+    const ids=assignments.filter(a=>a.task_id===taskId).map(a=>a.member_id);
     return members.filter(m=>ids.includes(m.id));
-  }, [assignments, members]);
+  }, [assignments,members]);
 
-  // Get tasks assigned to a specific member
+  // KEY FIX: memberTasks uses assignments table, not board_id
   const memberTasks = useCallback((memberId) => {
-    const assignedIds = assignments.filter(a=>a.member_id===memberId).map(a=>a.task_id);
+    const assignedIds=assignments.filter(a=>a.member_id===memberId).map(a=>a.task_id);
     return tasks.filter(t=>assignedIds.includes(t.id));
-  }, [assignments, tasks]);
+  }, [assignments,tasks]);
 
-  // Get ALL tasks that belong to current board (any member of this board is assigned)
   const boardTasks = useCallback(() => {
-    const memberIds = boardMembers.map(m=>m.id);
-    const assignedTaskIds = new Set(assignments.filter(a=>memberIds.includes(a.member_id)).map(a=>a.task_id));
+    const memberIds=boardMembers.map(m=>m.id);
+    const assignedTaskIds=new Set(assignments.filter(a=>memberIds.includes(a.member_id)).map(a=>a.task_id));
     return tasks.filter(t=>assignedTaskIds.has(t.id));
-  }, [assignments, tasks, boardMembers]);
+  }, [assignments,tasks,boardMembers]);
 
-  // All tasks regardless of board (for sidebar which shows all tasks in current board)
   const allTasksForSidebar = useCallback(() => {
-    const memberIds = boardMembers.map(m=>m.id);
-    const assignedTaskIds = new Set(assignments.filter(a=>memberIds.includes(a.member_id)).map(a=>a.task_id));
-    // Also include unassigned tasks that belong to this board
-    const unassignedBoardTasks = tasks.filter(t=>t.board_id===boardId&&assignments.filter(a=>a.task_id===t.id).length===0);
-    const assignedBoardTasks = tasks.filter(t=>assignedTaskIds.has(t.id));
-    return [...new Map([...unassignedBoardTasks,...assignedBoardTasks].map(t=>[t.id,t])).values()];
-  }, [assignments, tasks, boardMembers, boardId]);
+    const memberIds=boardMembers.map(m=>m.id);
+    const assignedTaskIds=new Set(assignments.filter(a=>memberIds.includes(a.member_id)).map(a=>a.task_id));
+    const unassigned=tasks.filter(t=>t.board_id===boardId&&assignments.filter(a=>a.task_id===t.id).length===0);
+    const assigned=tasks.filter(t=>assignedTaskIds.has(t.id));
+    return [...new Map([...unassigned,...assigned].map(t=>[t.id,t])).values()];
+  }, [assignments,tasks,boardMembers,boardId]);
 
+  // KEY FIX: always use assignee_schedules for per-member date/hour
   const getMemberSchedule = (task, memberId) => {
-    const s = (task.assignee_schedules||[]).find(s=>s.memberId===memberId);
-    return s || { date: task.date, hour: task.hour };
+    const s=(task.assignee_schedules||[]).find(s=>s.memberId===memberId);
+    if (s&&s.date) return s;
+    return {date:task.date, hour:task.hour||HOURS[0]};
   };
 
-  const clientOf = id => clients.find(c=>c.id===id);
-  const memberOf = id => members.find(m=>m.id===id);
+  const clientOf=id=>clients.find(c=>c.id===id);
+  const memberOf=id=>members.find(m=>m.id===id);
 
   const view   = views[boardId];
   const wStart = weekStarts[boardId];
@@ -202,52 +293,59 @@ export default function App() {
 
   // ── CRUD ──
   const addTask = async (form, memberId, date, hour) => {
-    const id = uid();
-    const { assignees=[], assigneeSchedules=[], reference_links=[], ...rest } = form;
-    const allAssignees = [...new Set([...(memberId?[memberId]:[]), ...assignees])];
-    const schedules = allAssignees.map(mid => {
-      const found = assigneeSchedules.find(s=>s.memberId===mid);
-      return { memberId:mid, date:found?.date||date||null, hour:found?.hour||hour||HOURS[0] };
+    const id=uid();
+    const {assignees=[],assigneeSchedules=[],reference_links=[],...rest}=form;
+    const allAssignees=[...new Set([...(memberId?[memberId]:[]),...assignees])];
+    // KEY FIX: build schedules with correct date/hour per member
+    const schedules=allAssignees.map(mid=>{
+      const found=assigneeSchedules.find(s=>s.memberId===mid);
+      return {memberId:mid,date:found?.date||date||null,hour:found?.hour||hour||HOURS[0]};
     });
+    // Use first assignee's schedule as the task's main date/hour
+    const mainDate=schedules[0]?.date||date||null;
+    const mainHour=schedules[0]?.hour||hour||HOURS[0];
     await supabase.from("tasks").insert({
-      id, member_id:allAssignees[0]||null, board_id:boardId,
-      title:rest.title||"Sin título", status:rest.status||"pendiente",
-      link:rest.link||"", comments:rest.comments||"",
-      client_id:rest.client_id||"", color:rest.color||"#E8623A",
-      duration:rest.duration||1, reference_links,
-      date:schedules[0]?.date||date||null,
-      hour:schedules[0]?.hour||hour||HOURS[0],
+      id,member_id:allAssignees[0]||null,board_id:boardId,
+      title:rest.title||"Sin título",status:rest.status||"pendiente",
+      link:rest.link||"",comments:rest.comments||"",
+      client_id:rest.client_id||"",color:rest.color||"#E8623A",
+      duration:rest.duration||1,reference_links,
+      date:mainDate,hour:mainHour,
       assignee_schedules:schedules,
       is_recurring:rest.is_recurring||false,
       recurrence_days:rest.recurrence_days||[],
       end_date:rest.end_date||null,
     });
-    if (allAssignees.length > 0) {
+    if (allAssignees.length>0)
       await supabase.from("task_assignments").insert(allAssignees.map(mid=>({id:uid(),task_id:id,member_id:mid})));
-    }
   };
 
   const quickAdd = async () => {
     if (!quickTitle.trim()) return;
-    const id = uid();
+    const id=uid();
     await supabase.from("tasks").insert({
-      id, board_id:boardId, title:quickTitle.trim(), status:"pendiente",
-      color:"#E8623A", duration:1, reference_links:[], assignee_schedules:[],
-      is_recurring:false, recurrence_days:[],
+      id,board_id:boardId,title:quickTitle.trim(),status:"pendiente",
+      color:"#E8623A",duration:1,reference_links:[],assignee_schedules:[],
+      is_recurring:false,recurrence_days:[],
     });
     setQuickTitle("");
   };
 
-  const updateTask = async (id, patch) => {
-    const { assignees, assigneeSchedules, ...rest } = patch;
-    const fm = { title:"title", status:"status", link:"link", date:"date", hour:"hour", end_date:"end_date", comments:"comments", client_id:"client_id", color:"color", duration:"duration", reference_links:"reference_links", memberId:"member_id", assignee_schedules:"assignee_schedules", is_recurring:"is_recurring", recurrence_days:"recurrence_days" };
-    const db = {};
-    Object.keys(rest).forEach(k=>{ if(fm[k]) db[fm[k]]=rest[k]; });
-    if (assigneeSchedules) db.assignee_schedules = assigneeSchedules;
-    if (Object.keys(db).length > 0) await supabase.from("tasks").update(db).eq("id",id);
-    if (assignees !== undefined) {
+  const updateTask = async (id,patch) => {
+    const {assignees,assigneeSchedules,...rest}=patch;
+    const fm={title:"title",status:"status",link:"link",date:"date",hour:"hour",end_date:"end_date",comments:"comments",client_id:"client_id",color:"color",duration:"duration",reference_links:"reference_links",memberId:"member_id",assignee_schedules:"assignee_schedules",is_recurring:"is_recurring",recurrence_days:"recurrence_days"};
+    const db={};
+    Object.keys(rest).forEach(k=>{if(fm[k])db[fm[k]]=rest[k];});
+    if (assigneeSchedules) db.assignee_schedules=assigneeSchedules;
+    // KEY FIX: always sync main date/hour from first assignee schedule
+    if (assigneeSchedules&&assigneeSchedules.length>0) {
+      db.date=assigneeSchedules[0].date||null;
+      db.hour=assigneeSchedules[0].hour||HOURS[0];
+    }
+    if (Object.keys(db).length>0) await supabase.from("tasks").update(db).eq("id",id);
+    if (assignees!==undefined) {
       await supabase.from("task_assignments").delete().eq("task_id",id);
-      if (assignees.length > 0) await supabase.from("task_assignments").insert(assignees.map(mid=>({id:uid(),task_id:id,member_id:mid})));
+      if (assignees.length>0) await supabase.from("task_assignments").insert(assignees.map(mid=>({id:uid(),task_id:id,member_id:mid})));
     }
   };
 
@@ -257,72 +355,72 @@ export default function App() {
   };
 
   const duplicateTask = async (task) => {
-    const id = uid();
-    const assigneeIds = assignments.filter(a=>a.task_id===task.id).map(a=>a.member_id);
-    const { id:_x, created_at, ...rest } = task;
-    await supabase.from("tasks").insert({ ...rest, id, title:`${task.title} (copia)` });
-    if (assigneeIds.length > 0) await supabase.from("task_assignments").insert(assigneeIds.map(mid=>({id:uid(),task_id:id,member_id:mid})));
+    const id=uid();
+    const assigneeIds=assignments.filter(a=>a.task_id===task.id).map(a=>a.member_id);
+    const {id:_x,created_at,...rest}=task;
+    await supabase.from("tasks").insert({...rest,id,title:`${task.title} (copia)`});
+    if (assigneeIds.length>0) await supabase.from("task_assignments").insert(assigneeIds.map(mid=>({id:uid(),task_id:id,member_id:mid})));
     setModal(null);
   };
 
-  const addMember = async (bId) => {
-    const bm = members.filter(m=>m.board_id===bId);
-    const colors = ["#E8623A","#3A6FE8","#7B6BE0","#3A9E8A","#C49A3C","#E06B9A"];
-    const b = boards.find(x=>x.id===bId);
+  const addMember=async(bId)=>{
+    const bm=members.filter(m=>m.board_id===bId);
+    const colors=["#E8623A","#3A6FE8","#7B6BE0","#3A9E8A","#C49A3C","#E06B9A"];
+    const b=boards.find(x=>x.id===bId);
     await supabase.from("members").insert({id:uid(),board_id:bId,name:`${b?.label||""} ${bm.length+1}`,color:colors[bm.length%colors.length],position:bm.length});
   };
-  const updateMember = async (id,patch) => supabase.from("members").update(patch).eq("id",id);
-  const deleteMember = async id => { await supabase.from("task_assignments").delete().eq("member_id",id); await supabase.from("members").delete().eq("id",id); };
-  const addClient = async () => {
-    if (!newClientName.trim()) return;
+  const updateMember=async(id,patch)=>supabase.from("members").update(patch).eq("id",id);
+  const deleteMember=async id=>{await supabase.from("task_assignments").delete().eq("member_id",id);await supabase.from("members").delete().eq("id",id);};
+  const addClient=async()=>{
+    if(!newClientName.trim())return;
     const colors=["#E8623A","#3A6FE8","#7B6BE0","#3A9E8A","#C49A3C","#E06B9A","#4CAF50","#58A6FF"];
     await supabase.from("clients").insert({id:uid(),name:newClientName.trim(),color:colors[clients.length%colors.length],position:clients.length});
     setNewClientName("");
   };
-  const updateClient = async (id,patch) => supabase.from("clients").update(patch).eq("id",id);
-  const deleteClient = async id => supabase.from("clients").delete().eq("id",id);
-  const updateBoard  = async (id,patch) => supabase.from("boards").update(patch).eq("id",id);
-  const saveBrand = async b => {
-    const {data} = await supabase.from("brand").select("id").single();
+  const updateClient=async(id,patch)=>supabase.from("clients").update(patch).eq("id",id);
+  const deleteClient=async id=>supabase.from("clients").delete().eq("id",id);
+  const updateBoard=async(id,patch)=>supabase.from("boards").update(patch).eq("id",id);
+  const saveBrand=async b=>{
+    const{data}=await supabase.from("brand").select("id").single();
     await supabase.from("brand").update({name:b.name,logo:b.logo,nav_bg:b.navBg,sidebar_bg:b.sidebarBg,topbar_bg:b.topbarBg,accent:b.accent}).eq("id",data.id);
   };
 
   // ── Modal ──
-  const openAdd = (memberId, date, hour) => {
+  const openAdd=(memberId,date,hour)=>{
     setModal({mode:"add",memberId,date,hour});
-    const schedules = memberId ? [{memberId,date:date||"",hour:hour||HOURS[0]}] : [];
+    const schedules=memberId?[{memberId,date:date||"",hour:hour||HOURS[0]}]:[];
     setModalForm({...EMPTY_FORM,assignees:memberId?[memberId]:[],assigneeSchedules:schedules,date:date||"",hour:hour||HOURS[0]});
   };
 
-  const openEdit = task => {
-    const assigneeIds = assignments.filter(a=>a.task_id===task.id).map(a=>a.member_id);
-    const schedules = assigneeIds.map(mid => {
-      const found = (task.assignee_schedules||[]).find(s=>s.memberId===mid);
-      return {memberId:mid, date:found?.date||task.date||"", hour:found?.hour||task.hour||HOURS[0]};
+  const openEdit=task=>{
+    const assigneeIds=assignments.filter(a=>a.task_id===task.id).map(a=>a.member_id);
+    const schedules=assigneeIds.map(mid=>{
+      const found=(task.assignee_schedules||[]).find(s=>s.memberId===mid);
+      return {memberId:mid,date:found?.date||task.date||"",hour:found?.hour||task.hour||HOURS[0]};
     });
     setModal({mode:"edit",task});
     setModalForm({
-      title:task.title, link:task.link||"", status:task.status||"pendiente",
-      comments:task.comments||"", client_id:task.client_id||"",
-      color:task.color||"#E8623A", duration:task.duration||1,
-      assignees:assigneeIds, assigneeSchedules:schedules,
+      title:task.title,link:task.link||"",status:task.status||"pendiente",
+      comments:task.comments||"",client_id:task.client_id||"",
+      color:task.color||"#E8623A",duration:task.duration||1,
+      assignees:assigneeIds,assigneeSchedules:schedules,
       reference_links:task.reference_links||[],
-      date:task.date||"", hour:task.hour||HOURS[0],
+      date:task.date||"",hour:task.hour||HOURS[0],
       end_date:task.end_date||"",
       is_recurring:task.is_recurring||false,
       recurrence_days:task.recurrence_days||[],
     });
   };
 
-  const saveModal = async () => {
-    if (!modalForm.title.trim()) return;
-    if (modal.mode==="add") {
-      await addTask(modalForm, modal.memberId, modalForm.date, modalForm.hour);
+  const saveModal=async()=>{
+    if(!modalForm.title.trim())return;
+    if(modal.mode==="add"){
+      await addTask(modalForm,modal.memberId,modalForm.date,modalForm.hour);
     } else {
-      await updateTask(modal.task.id, {
-        title:modalForm.title, link:modalForm.link, status:modalForm.status,
-        comments:modalForm.comments, client_id:modalForm.client_id,
-        color:modalForm.color, duration:modalForm.duration,
+      await updateTask(modal.task.id,{
+        title:modalForm.title,link:modalForm.link,status:modalForm.status,
+        comments:modalForm.comments,client_id:modalForm.client_id,
+        color:modalForm.color,duration:modalForm.duration,
         reference_links:modalForm.reference_links,
         assignees:modalForm.assignees,
         assigneeSchedules:modalForm.assigneeSchedules,
@@ -336,53 +434,52 @@ export default function App() {
     setModal(null);
   };
 
-  const setField = (k,v) => setModalForm(p=>({...p,[k]:v}));
+  const setField=(k,v)=>setModalForm(p=>({...p,[k]:v}));
 
-  const toggleAssignee = (mid) => {
-    const sel = modalForm.assignees.includes(mid);
-    const newA = sel ? modalForm.assignees.filter(id=>id!==mid) : [...modalForm.assignees,mid];
-    const newS = sel ? modalForm.assigneeSchedules.filter(s=>s.memberId!==mid) : [...modalForm.assigneeSchedules,{memberId:mid,date:modalForm.date||"",hour:modalForm.hour||HOURS[0]}];
+  const toggleAssignee=(mid)=>{
+    const sel=modalForm.assignees.includes(mid);
+    const newA=sel?modalForm.assignees.filter(id=>id!==mid):[...modalForm.assignees,mid];
+    const newS=sel?modalForm.assigneeSchedules.filter(s=>s.memberId!==mid):[...modalForm.assigneeSchedules,{memberId:mid,date:modalForm.date||"",hour:modalForm.hour||HOURS[0]}];
     setModalForm(p=>({...p,assignees:newA,assigneeSchedules:newS}));
   };
 
-  const updateAssigneeSchedule = (mid,field,value) => {
+  const updateAssigneeSchedule=(mid,field,value)=>{
     setModalForm(p=>({...p,assigneeSchedules:p.assigneeSchedules.map(s=>s.memberId===mid?{...s,[field]:value}:s)}));
   };
 
-  const toggleRecurrenceDay = (day) => {
-    const days = modalForm.recurrence_days||[];
-    setField("recurrence_days", days.includes(day)?days.filter(d=>d!==day):[...days,day]);
+  const toggleRecurrenceDay=(day)=>{
+    const days=modalForm.recurrence_days||[];
+    setField("recurrence_days",days.includes(day)?days.filter(d=>d!==day):[...days,day]);
   };
 
   // ── Drag ──
-  const dragTask = useRef(null);
-  const onCalDragStart = (e,task) => { e.stopPropagation(); dragTask.current={task}; };
-  const onCalDrop = async (e,memberId,date,hour) => {
+  const dragTask=useRef(null);
+  const onCalDragStart=(e,task)=>{e.stopPropagation();dragTask.current={task};};
+  const onCalDrop=async(e,memberId,date,hour)=>{
     e.preventDefault();
-    if (!dragTask.current) return;
-    const t = dragTask.current.task;
-    const assigneeIds = assignments.filter(a=>a.task_id===t.id).map(a=>a.member_id);
-    const boardMemberIds = boardMembers.map(m=>m.id);
-    // Replace board members in assignees with the dropped member, keep cross-board members
-    const crossBoardAssignees = assigneeIds.filter(id=>!boardMemberIds.includes(id));
-    const newAssignees = [...crossBoardAssignees, memberId];
-    const newSchedules = newAssignees.map(mid => {
-      if (mid===memberId) return {memberId,date,hour};
-      const found = (t.assignee_schedules||[]).find(s=>s.memberId===mid);
-      return found || {memberId:mid,date:t.date,hour:t.hour};
+    if(!dragTask.current)return;
+    const t=dragTask.current.task;
+    const assigneeIds=assignments.filter(a=>a.task_id===t.id).map(a=>a.member_id);
+    const boardMemberIds=boardMembers.map(m=>m.id);
+    const crossBoard=assigneeIds.filter(id=>!boardMemberIds.includes(id));
+    const newAssignees=[...crossBoard,memberId];
+    const newSchedules=newAssignees.map(mid=>{
+      if(mid===memberId)return{memberId,date,hour};
+      const found=(t.assignee_schedules||[]).find(s=>s.memberId===mid);
+      return found||{memberId:mid,date:t.date,hour:t.hour};
     });
-    await updateTask(t.id, {date,hour,memberId,assignees:newAssignees,assigneeSchedules:newSchedules});
-    dragTask.current = null;
+    await updateTask(t.id,{date,hour,memberId,assignees:newAssignees,assigneeSchedules:newSchedules});
+    dragTask.current=null;
   };
 
-  const handleLogoUpload = e => {
-    const file=e.target.files[0]; if(!file) return;
+  const handleLogoUpload=e=>{
+    const file=e.target.files[0];if(!file)return;
     const reader=new FileReader();
     reader.onload=ev=>setBrand(p=>({...p,logo:ev.target.result}));
     reader.readAsDataURL(file);
   };
 
-  if (loading) return (
+  if(loading)return(
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",flexDirection:"column",gap:12}}>
       <div style={{width:40,height:40,borderRadius:10,background:"#E8623A",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <span style={{color:"#fff",fontSize:14,fontWeight:700}}>OL</span>
@@ -392,17 +489,17 @@ export default function App() {
   );
 
   // ── Sidebar Tasks ──
-  const SidebarTasks = () => {
-    const allT = allTasksForSidebar();
-    const filtered = filterClient ? allT.filter(t=>t.client_id===filterClient) : allT;
-    return (
+  const SidebarTasks=()=>{
+    const allT=allTasksForSidebar();
+    const filtered=filterClient?allT.filter(t=>t.client_id===filterClient):allT;
+    return(
       <div style={{flex:1,overflowY:"auto",padding:"0.5rem"}}>
         {STATUSES.map(st=>{
-          const stTasks = filtered.filter(t=>t.status===st.value);
-          const isOpen  = openGroups[st.value];
-          const byClient = {};
-          stTasks.forEach(t=>{ const k=t.client_id||"sin-cliente"; if(!byClient[k]) byClient[k]=[]; byClient[k].push(t); });
-          return (
+          const stTasks=filtered.filter(t=>t.status===st.value);
+          const isOpen=openGroups[st.value];
+          const byClient={};
+          stTasks.forEach(t=>{const k=t.client_id||"sin-cliente";if(!byClient[k])byClient[k]=[];byClient[k].push(t);});
+          return(
             <div key={st.value} style={{marginBottom:6}}>
               <button onClick={()=>setOpenGroups(p=>({...p,[st.value]:!p[st.value]}))}
                 style={{display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",width:"100%",padding:"4px 6px",borderRadius:6}}>
@@ -411,10 +508,10 @@ export default function App() {
                 <span style={{fontSize:10,color:"#555",marginLeft:"auto"}}>{stTasks.length}</span>
                 <span style={{fontSize:10,color:"#555"}}>{isOpen?"▾":"▸"}</span>
               </button>
-              {isOpen && Object.entries(byClient).map(([cKey,cTasks])=>{
-                const cl = cKey==="sin-cliente" ? null : clientOf(cKey);
-                const isClientOpen = openClients[`${st.value}-${cKey}`] !== false;
-                return (
+              {isOpen&&Object.entries(byClient).map(([cKey,cTasks])=>{
+                const cl=cKey==="sin-cliente"?null:clientOf(cKey);
+                const isClientOpen=openClients[`${st.value}-${cKey}`]!==false;
+                return(
                   <div key={cKey} style={{marginLeft:8,marginBottom:2}}>
                     <button onClick={()=>setOpenClients(p=>({...p,[`${st.value}-${cKey}`]:!isClientOpen}))}
                       style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",cursor:"pointer",width:"100%",padding:"3px 4px",borderRadius:4}}>
@@ -422,20 +519,18 @@ export default function App() {
                       <span style={{fontSize:10,color:cl?cl.color:"#555",fontWeight:500}}>{cl?cl.name:"Sin cliente"}</span>
                       <span style={{fontSize:9,color:"#444",marginLeft:"auto"}}>{cTasks.length} {isClientOpen?"▾":"▸"}</span>
                     </button>
-                    {isClientOpen && cTasks.map(t=>{
-                      const assignees = taskAssignees(t.id);
-                      return (
+                    {isClientOpen&&cTasks.map(t=>{
+                      const assignees=taskAssignees(t.id);
+                      return(
                         <div key={t.id} onDoubleClick={()=>openEdit(t)}
                           style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 6px",margin:"2px 0",background:"#252525",border:`1px solid ${t.color||"#444"}33`,borderLeft:`3px solid ${t.color||"#444"}`,borderRadius:"0 6px 6px 0",cursor:"pointer"}}>
                           <div style={{flex:1,minWidth:0}}>
                             <p style={{fontSize:11,color:t.status==="terminada"?"#555":"#ddd",margin:0,lineHeight:1.3,textDecoration:t.status==="terminada"?"line-through":"none",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title}</p>
                             {t.is_recurring&&<span style={{fontSize:9,color:"#58A6FF",background:"#58A6FF22",borderRadius:10,padding:"1px 5px"}}>↻ Recurrente</span>}
                             {t.end_date&&!t.is_recurring&&<span style={{fontSize:9,color:"#C49A3C",background:"#C49A3C22",borderRadius:10,padding:"1px 5px",marginLeft:3}}>↔ Rango</span>}
-                            {assignees.length>0&&(
-                              <div style={{display:"flex",gap:2,marginTop:3,flexWrap:"wrap"}}>
-                                {assignees.map(m=><span key={m.id} style={{fontSize:9,background:m.color+"33",color:m.color,borderRadius:10,padding:"1px 5px"}}>{m.name}</span>)}
-                              </div>
-                            )}
+                            {assignees.length>0&&<div style={{display:"flex",gap:2,marginTop:3,flexWrap:"wrap"}}>
+                              {assignees.map(m=><span key={m.id} style={{fontSize:9,background:m.color+"33",color:m.color,borderRadius:10,padding:"1px 5px"}}>{m.name}</span>)}
+                            </div>}
                           </div>
                           <button onClick={e=>{e.stopPropagation();openEdit(t);}} style={{background:"none",border:"none",color:"#555",fontSize:11,cursor:"pointer",padding:0,flexShrink:0}}>✎</button>
                         </div>
@@ -453,13 +548,12 @@ export default function App() {
   };
 
   // ── Task Block ──
-  const TaskBlock = ({ t }) => {
-    const cl  = clientOf(t.client_id);
-    const dur = t.duration||1;
-    const h   = dur*HOUR_H-4;
-    return (
+  const TaskBlock=({t})=>{
+    const cl=clientOf(t.client_id);
+    const dur=t.duration||1;
+    return(
       <div draggable onDragStart={e=>onCalDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
-        style={{position:"absolute",left:2,right:2,top:2,height:h,background:t.color||"#E8623A",borderRadius:6,padding:"3px 6px",cursor:"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
+        style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#E8623A",borderRadius:6,padding:"3px 6px",cursor:"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
         <p style={{fontSize:10,fontWeight:600,color:textOn(t.color||"#E8623A"),margin:0,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
           {t.title}{t.is_recurring?" ↻":""}{t.end_date?" ↔":""}
         </p>
@@ -470,7 +564,7 @@ export default function App() {
   };
 
   // ── Settings ──
-  const renderSettings = () => (
+  const renderSettings=()=>(
     <div onClick={()=>setSettingsOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,width:540,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column"}}>
         <div style={{padding:"1.5rem 1.5rem 1rem",borderBottom:"1px solid #F0EDE8",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -481,7 +575,7 @@ export default function App() {
           <button onClick={()=>setSettingsOpen(false)} style={{background:"none",border:"1px solid #E8E4DE",borderRadius:10,width:34,height:34,cursor:"pointer",fontSize:16,color:"#999"}}>✕</button>
         </div>
         <div style={{display:"flex",gap:4,padding:"0.75rem 1.5rem",borderBottom:"1px solid #F0EDE8",flexWrap:"wrap"}}>
-          {[["marca","Marca"],["colores","Colores"],["tableros","Tableros"],["clientes","Clientes"]].map(([t,l])=>(
+          {[["marca","Marca"],["colores","Colores"],["tableros","Tableros"],["clientes","Clientes"],["acceso","Acceso"]].map(([t,l])=>(
             <button key={t} onClick={()=>setSettingsTab(t)} style={{background:settingsTab===t?brand.accent:"#F4F2EE",border:"none",borderRadius:20,padding:"5px 14px",fontSize:11,fontWeight:settingsTab===t?600:400,color:settingsTab===t?"#fff":"#888",cursor:"pointer"}}>{l}</button>
           ))}
         </div>
@@ -589,6 +683,23 @@ export default function App() {
               ))}
             </div>
           )}
+          {settingsTab==="acceso"&&(
+            <div style={{display:"flex",flexDirection:"column",gap:"0.75rem"}}>
+              <label style={lbS2}>Usuario actual</label>
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#FAFAF9",border:"1px solid #F0EDE8",borderRadius:10,marginBottom:8}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:"#E8623A",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{color:"#fff",fontSize:12,fontWeight:700}}>{session.user.email[0].toUpperCase()}</span>
+                </div>
+                <div>
+                  <p style={{fontSize:13,fontWeight:500,color:"#1C1C1C",margin:0}}>{session.user.user_metadata?.full_name||"Usuario"}</p>
+                  <p style={{fontSize:11,color:"#aaa",margin:0}}>{session.user.email}</p>
+                </div>
+                <button onClick={()=>supabase.auth.signOut()} style={{marginLeft:"auto",background:"none",border:"1px solid #FFD0C8",borderRadius:8,padding:"5px 12px",fontSize:11,color:"#E8623A",cursor:"pointer"}}>Cerrar sesión</button>
+              </div>
+              <label style={lbS2}>Agregar usuario autorizado</label>
+              <AddUserSection/>
+            </div>
+          )}
         </div>
         <div style={{padding:"1rem 1.5rem",borderTop:"1px solid #F0EDE8",display:"flex",justifyContent:"flex-end"}}>
           <button onClick={async()=>{await saveBrand(brand);setSettingsOpen(false);}} style={{background:brand.accent,border:"none",borderRadius:10,padding:"9px 22px",fontSize:13,color:textOn(brand.accent),cursor:"pointer",fontWeight:600}}>Guardar cambios</button>
@@ -597,16 +708,14 @@ export default function App() {
     </div>
   );
 
-  // ── Task Modal ──
-  const renderModal = () => {
-    const isEdit  = modal.mode==="edit";
-    const refLinks = modalForm.reference_links||[];
-    const taskType = modalForm.is_recurring?"recurring":modalForm.end_date?"range":"normal";
-    return (
+  // ── Modal ──
+  const renderModal=()=>{
+    const isEdit=modal.mode==="edit";
+    const refLinks=modalForm.reference_links||[];
+    const taskType=modalForm.is_recurring?"recurring":modalForm.end_date?"range":"normal";
+    return(
       <div onClick={()=>setModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,backdropFilter:"blur(3px)"}}>
         <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,padding:"1.75rem",width:520,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
-
-          {/* Header + color */}
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:"1rem"}}>
             <div style={{width:14,height:14,borderRadius:"50%",background:modalForm.color,flexShrink:0}}/>
             <p style={{fontFamily:"'DM Serif Display',serif",fontSize:"1.15rem",color:"#1C1C1C",margin:0,flex:1}}>{isEdit?"Editar tarea":"Nueva tarea"}</p>
@@ -620,27 +729,21 @@ export default function App() {
                 style={{width:72,border:"1px solid #E8E4DE",borderRadius:6,padding:"4px 6px",fontSize:11,outline:"none",fontFamily:"monospace",color:"#555"}}/>
             </div>
           </div>
-
-          {/* Título */}
           <label style={lbS}>Nombre de la tarea</label>
           <input ref={titleRef} value={modalForm.title} onChange={e=>setField("title",e.target.value)}
             placeholder="Nombre de la tarea..." style={{...inS,borderBottomColor:modalForm.color,marginBottom:"1.1rem"}}/>
-
-          {/* Cliente */}
           <label style={lbS}>Cliente / Negocio</label>
           <select value={modalForm.client_id} onChange={e=>setField("client_id",e.target.value)}
             style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",marginBottom:"1.1rem",cursor:"pointer"}}>
             <option value="">— Sin cliente —</option>
             {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-
-          {/* Asignados */}
           <label style={lbS}>Asignar a</label>
           <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
             {members.map(m=>{
-              const sel = modalForm.assignees.includes(m.id);
-              const brd = boards.find(b=>b.id===m.board_id);
-              return (
+              const sel=modalForm.assignees.includes(m.id);
+              const brd=boards.find(b=>b.id===m.board_id);
+              return(
                 <button key={m.id} onClick={()=>toggleAssignee(m.id)}
                   style={{display:"flex",alignItems:"center",gap:5,background:sel?m.color:"#F4F2EE",border:`1.5px solid ${sel?m.color:"transparent"}`,borderRadius:20,padding:"4px 10px",cursor:"pointer"}}>
                   <div style={{width:16,height:16,borderRadius:"50%",background:sel?"rgba(255,255,255,0.3)":m.color,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -652,14 +755,12 @@ export default function App() {
               );
             })}
           </div>
-
-          {/* Horario por asignado */}
           {modalForm.assigneeSchedules.length>0&&!modalForm.is_recurring&&(
             <div style={{background:"#FAFAF9",border:"1px solid #E8E4DE",borderRadius:10,padding:"10px 12px",marginBottom:"1.1rem"}}>
               <p style={{fontSize:9,letterSpacing:1,color:"#aaa",textTransform:"uppercase",margin:"0 0 8px",fontWeight:500}}>Horario por persona</p>
               {modalForm.assigneeSchedules.map(s=>{
-                const m=memberOf(s.memberId); if(!m) return null;
-                return (
+                const m=memberOf(s.memberId);if(!m)return null;
+                return(
                   <div key={s.memberId} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
                     <div style={{width:18,height:18,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                       <span style={{color:"#fff",fontSize:8,fontWeight:700}}>{m.name[0]}</span>
@@ -676,16 +777,14 @@ export default function App() {
               })}
             </div>
           )}
-
-          {/* Tipo de tarea */}
           <label style={lbS}>Tipo de tarea</label>
           <div style={{display:"flex",gap:8,marginBottom:"1.1rem"}}>
             {[["normal","Normal","—"],["recurring","Recurrente","↻"],["range","Rango de fechas","↔"]].map(([type,label,icon])=>{
-              const active = taskType===type;
-              return (
+              const active=taskType===type;
+              return(
                 <button key={type} onClick={()=>{
-                  if(type==="recurring") setModalForm(p=>({...p,is_recurring:true,end_date:""}));
-                  else if(type==="range") setModalForm(p=>({...p,is_recurring:false,end_date:p.end_date||""}));
+                  if(type==="recurring")setModalForm(p=>({...p,is_recurring:true,end_date:""}));
+                  else if(type==="range")setModalForm(p=>({...p,is_recurring:false,end_date:p.end_date||""}));
                   else setModalForm(p=>({...p,is_recurring:false,end_date:""}));
                 }}
                   style={{flex:1,background:active?"#F4F2EE":"transparent",border:`1.5px solid ${active?modalForm.color:"#E8E4DE"}`,borderRadius:8,padding:"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
@@ -695,15 +794,13 @@ export default function App() {
               );
             })}
           </div>
-
-          {/* Recurrencia */}
           {modalForm.is_recurring&&(
             <div style={{background:"#F0F7FF",border:"1px solid #B5D4F4",borderRadius:10,padding:"10px 12px",marginBottom:"1.1rem"}}>
               <p style={{fontSize:9,letterSpacing:1,color:"#3A6FE8",textTransform:"uppercase",margin:"0 0 8px",fontWeight:500}}>Días de repetición</p>
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
                 {WEEK_DAYS_FULL.map(day=>{
                   const sel=(modalForm.recurrence_days||[]).includes(day);
-                  return <button key={day} onClick={()=>toggleRecurrenceDay(day)}
+                  return<button key={day} onClick={()=>toggleRecurrenceDay(day)}
                     style={{background:sel?modalForm.color:"#fff",border:`1px solid ${sel?modalForm.color:"#E8E4DE"}`,borderRadius:20,padding:"3px 10px",fontSize:11,cursor:"pointer",color:sel?textOn(modalForm.color):"#666"}}>{day}</button>;
                 })}
               </div>
@@ -716,8 +813,6 @@ export default function App() {
               </div>
             </div>
           )}
-
-          {/* Fechas */}
           {!modalForm.is_recurring&&(
             <div style={{display:"flex",gap:12,marginBottom:"1.1rem"}}>
               <div style={{flex:1}}>
@@ -741,8 +836,6 @@ export default function App() {
               )}
             </div>
           )}
-
-          {/* Duración */}
           {!modalForm.end_date&&!modalForm.is_recurring&&(
             <>
               <label style={lbS}>Duración (horas)</label>
@@ -752,8 +845,6 @@ export default function App() {
               </select>
             </>
           )}
-
-          {/* Estado */}
           <label style={lbS}>Estado</label>
           <div style={{display:"flex",gap:6,marginBottom:"1.1rem"}}>
             {STATUSES.map(s=>(
@@ -764,19 +855,15 @@ export default function App() {
               </button>
             ))}
           </div>
-
-          {/* Comentarios */}
           <label style={lbS}>Instrucciones / Comentarios</label>
           <textarea value={modalForm.comments} onChange={e=>setField("comments",e.target.value)} placeholder="Instrucciones para el equipo..."
             style={{width:"100%",border:"1px solid #E8E4DE",borderRadius:10,padding:"10px 12px",fontSize:13,outline:"none",background:"#FAFAF9",color:"#1C1C1C",resize:"vertical",minHeight:80,fontFamily:"'DM Sans',sans-serif",marginBottom:"1.1rem",boxSizing:"border-box"}}/>
-
-          {/* Links referencia */}
           <label style={lbS}>Links de referencia</label>
           {refLinks.map((rl,i)=>(
             <div key={i} style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
-              <input value={rl.name||""} onChange={e=>{ const a=[...refLinks]; a[i]={...a[i],name:e.target.value}; setField("reference_links",a); }}
+              <input value={rl.name||""} onChange={e=>{const a=[...refLinks];a[i]={...a[i],name:e.target.value};setField("reference_links",a);}}
                 placeholder="Nombre" style={{width:120,border:"none",borderBottom:"1px solid #E8E4DE",fontSize:12,outline:"none",background:"transparent",color:"#1C1C1C",padding:"4px 0"}}/>
-              <input value={rl.url||""} onChange={e=>{ const a=[...refLinks]; a[i]={...a[i],url:e.target.value}; setField("reference_links",a); }}
+              <input value={rl.url||""} onChange={e=>{const a=[...refLinks];a[i]={...a[i],url:e.target.value};setField("reference_links",a);}}
                 placeholder="https://..." style={{flex:1,border:"none",borderBottom:"1px solid #E8E4DE",fontSize:12,outline:"none",background:"transparent",color:"#1C1C1C",padding:"4px 0"}}/>
               {rl.url&&<a href={ensureHttp(rl.url)} target="_blank" rel="noreferrer" style={{fontSize:14,color:"#3A6FE8",textDecoration:"none",flexShrink:0}}>↗</a>}
               <button onClick={()=>setField("reference_links",refLinks.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#ccc",cursor:"pointer",fontSize:14}}>✕</button>
@@ -786,16 +873,12 @@ export default function App() {
             style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"1px dashed #ddd",borderRadius:8,padding:"5px 10px",fontSize:11,color:"#aaa",cursor:"pointer",marginBottom:"1.1rem"}}>
             <span style={{fontSize:16}}>+</span> Agregar link de referencia
           </button>
-
-          {/* Link entregable */}
           <label style={lbS}>Link de entregable <span style={{color:"#bbb",fontWeight:400}}>(opcional)</span></label>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:"1.5rem"}}>
             <input value={modalForm.link} onChange={e=>setField("link",e.target.value)} placeholder="https://..."
               style={{...inS,borderBottomColor:"#E8E4DE",flex:1}}/>
             {modalForm.link&&<a href={ensureHttp(modalForm.link)} target="_blank" rel="noreferrer" style={{fontSize:18,color:"#3A6FE8",textDecoration:"none",flexShrink:0}}>↗</a>}
           </div>
-
-          {/* Botones */}
           <div style={{display:"flex",gap:8,justifyContent:"space-between",flexWrap:"wrap"}}>
             <div style={{display:"flex",gap:8}}>
               {isEdit&&<button onClick={()=>{deleteTask(modal.task.id);setModal(null);}} style={{background:"none",border:"1px solid #FFD0C8",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",color:"#E8623A"}}>Eliminar</button>}
@@ -811,9 +894,9 @@ export default function App() {
     );
   };
 
-  // ── Main render ──
-  return (
+  return(
     <div style={{display:"flex",height:"100vh",background:"#F4F2EE",fontFamily:"'DM Sans',sans-serif",overflow:"hidden"}}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
       {/* Left nav */}
       <div style={{width:64,background:brand.navBg,display:"flex",flexDirection:"column",alignItems:"center",paddingTop:14,gap:4,zIndex:20,flexShrink:0}}>
         <div style={{width:38,height:38,borderRadius:10,background:brand.logo?"transparent":brand.accent,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,overflow:"hidden",flexShrink:0}}>
@@ -829,7 +912,6 @@ export default function App() {
         <button onClick={()=>setSettingsOpen(true)} style={{width:44,height:44,borderRadius:12,border:"none",cursor:"pointer",background:"transparent",color:"#555",fontSize:18,marginBottom:4}}>⚙</button>
         <button onClick={()=>setSidebarOpen(o=>!o)} style={{width:44,height:44,borderRadius:12,border:"none",cursor:"pointer",background:"transparent",color:"#555",fontSize:18,marginBottom:12}}>☰</button>
       </div>
-
       {/* Sidebar */}
       {sidebarOpen&&board&&(
         <div style={{width:270,background:brand.sidebarBg,display:"flex",flexDirection:"column",zIndex:10,flexShrink:0}}>
@@ -861,26 +943,20 @@ export default function App() {
           </div>
           <SidebarTasks/>
           <div style={{padding:"0.5rem 1rem",borderTop:"1px solid #2a2a2a",display:"flex",flexDirection:"column",gap:6}}>
-            {/* Quick add */}
             <div style={{display:"flex",gap:6}}>
-              <input value={quickTitle} onChange={e=>setQuickTitle(e.target.value)}
-                onKeyDown={e=>e.key==="Enter"&&quickAdd()}
-                placeholder="Tarea rápida..."
-                style={{flex:1,background:"#2a2a2a",border:"none",borderRadius:8,color:"#F4F2EE",fontSize:11,padding:"6px 8px",outline:"none"}}/>
+              <input value={quickTitle} onChange={e=>setQuickTitle(e.target.value)} onKeyDown={e=>e.key==="Enter"&&quickAdd()}
+                placeholder="Tarea rápida..." style={{flex:1,background:"#2a2a2a",border:"none",borderRadius:8,color:"#F4F2EE",fontSize:11,padding:"6px 8px",outline:"none"}}/>
               <button onClick={quickAdd} style={{background:brand.accent,border:"none",borderRadius:8,color:textOn(brand.accent),fontSize:16,cursor:"pointer",width:28,fontWeight:700}}>+</button>
             </div>
-            {/* Full modal */}
             <button onClick={()=>openAdd(null,null,null)} style={{width:"100%",background:"transparent",border:`1px solid ${brand.accent}55`,borderRadius:8,color:brand.accent,fontSize:11,cursor:"pointer",padding:"6px",fontWeight:500}}>
               + Nueva tarea completa
             </button>
           </div>
         </div>
       )}
-
       {/* Main */}
       {board&&(
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-          {/* Topbar */}
           <div style={{background:brand.topbarBg,borderBottom:"1px solid #E8E4DE",padding:"0.6rem 1.25rem",display:"flex",alignItems:"center",gap:"0.75rem",flexWrap:"wrap"}}>
             <div style={{display:"flex",gap:6}}>
               {boards.map(b=>(
@@ -921,13 +997,13 @@ export default function App() {
             <button onClick={()=>setSettingsOpen(true)} style={{...iBtnS,background:brand.accent+"18",borderRadius:8,border:`1px solid ${brand.accent}55`,color:brand.accent,fontSize:12,padding:"4px 10px",fontWeight:500}}>⚙ Personalizar</button>
           </div>
 
-          {/* Weekly view */}
+          {/* Weekly */}
           {view==="weekly"&&(
             <div style={{flex:1,overflowY:"auto",padding:"1rem"}}>
               {boardMembers.map(m=>{
-                const mTasks = memberTasks(m.id).filter(t=>filterClient?t.client_id===filterClient:true);
-                const wc = mTasks.filter(t=>weekDates.some(d=>taskOccursOn(t,fmtDate(d)))).length;
-                return (
+                const mTasks=memberTasks(m.id).filter(t=>filterClient?t.client_id===filterClient:true);
+                const wc=mTasks.filter(t=>weekDates.some(d=>taskOccursOn(t,fmtDate(d)))).length;
+                return(
                   <div key={m.id} style={{marginBottom:"1.5rem"}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"0 4px"}}>
                       <div style={{width:22,height:22,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -939,9 +1015,9 @@ export default function App() {
                     <div style={{display:"grid",gridTemplateColumns:"52px repeat(5,1fr)",border:"1px solid #E8E4DE",borderRadius:12,overflow:"hidden",background:"#fff"}}>
                       <div style={{padding:"5px 6px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#FAFAF9"}}/>
                       {weekDates.map((d,i)=>{
-                        const isT = fmtDate(d)===fmtDate(today);
-                        const hol = isHoliday(d);
-                        return (
+                        const isT=fmtDate(d)===fmtDate(today);
+                        const hol=isHoliday(d);
+                        return(
                           <div key={i} style={{padding:"5px 6px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:hol?"#FFF0F5":isT?m.color+"15":"#FAFAF9",borderLeft:"1px solid #E8E4DE"}}>
                             <span style={{fontSize:9,color:hol?"#E06B9A":"#bbb"}}>{WEEK_DAYS[i]}</span>
                             <span style={{fontSize:13,color:hol?"#E06B9A":isT?m.color:"#1C1C1C",fontWeight:isT?700:400}}>{d.getDate()}</span>
@@ -953,14 +1029,15 @@ export default function App() {
                         <>
                           <div key={hour+"L"} style={{height:HOUR_H,padding:"5px 4px",fontSize:9,color:"#ccc",textAlign:"right",borderTop:"1px solid #F0EDE8",background:"#FAFAF9",display:"flex",alignItems:"flex-start",justifyContent:"flex-end"}}>{hour}</div>
                           {weekDates.map((d,di)=>{
-                            const dk = fmtDate(d);
-                            const ct = mTasks.filter(t=>{
-                              const sch = getMemberSchedule(t,m.id);
-                              const taskHour = t.is_recurring ? t.hour : sch.hour;
-                              if (taskHour !== hour) return false;
-                              return taskOccursOn(t, dk);
+                            const dk=fmtDate(d);
+                            // KEY FIX: use getMemberSchedule for per-member hour matching
+                            const ct=mTasks.filter(t=>{
+                              if(!taskOccursOn(t,dk))return false;
+                              if(t.is_recurring)return(t.hour||HOURS[0])===hour;
+                              const sch=getMemberSchedule(t,m.id);
+                              return(sch.hour||HOURS[0])===hour;
                             });
-                            return (
+                            return(
                               <div key={di}
                                 onDragOver={e=>e.preventDefault()}
                                 onDrop={e=>onCalDrop(e,m.id,dk,hour)}
@@ -979,19 +1056,19 @@ export default function App() {
             </div>
           )}
 
-          {/* Monthly view */}
+          {/* Monthly */}
           {view==="monthly"&&(
             <div style={{flex:1,overflowY:"auto",padding:"1rem"}}>
               {(()=>{
-                const dim=getDIM(cYear,cMonth), fd=getFD(cYear,cMonth);
+                const dim=getDIM(cYear,cMonth),fd=getFD(cYear,cMonth);
                 const cells=[];
-                for(let i=0;i<fd;i++) cells.push(null);
-                for(let d=1;d<=dim;d++) cells.push(d);
-                while(cells.length%7!==0) cells.push(null);
+                for(let i=0;i<fd;i++)cells.push(null);
+                for(let d=1;d<=dim;d++)cells.push(d);
+                while(cells.length%7!==0)cells.push(null);
                 const weeks=[];
-                for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7));
-                const allT = boardTasks().filter(t=>filterClient?t.client_id===filterClient:true);
-                return (
+                for(let i=0;i<cells.length;i+=7)weeks.push(cells.slice(i,i+7));
+                const allT=boardTasks().filter(t=>filterClient?t.client_id===filterClient:true);
+                return(
                   <div style={{minWidth:700}}>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
                       {DAYS_SHORT.map(d=><div key={d} style={{textAlign:"center",fontSize:9,letterSpacing:2,color:"#bbb",textTransform:"uppercase",padding:"4px 0"}}>{d}</div>)}
@@ -999,12 +1076,12 @@ export default function App() {
                     {weeks.map((week,wi)=>(
                       <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
                         {week.map((day,di)=>{
-                          const isT = day&&day===today.getDate()&&cMonth===today.getMonth()&&cYear===today.getFullYear();
-                          const dateObj = day ? new Date(cYear,cMonth,day) : null;
-                          const hol = dateObj ? isHoliday(dateObj) : null;
-                          const dk  = day ? fmtDate(new Date(cYear,cMonth,day)) : null;
-                          const dt  = day ? allT.filter(t=>taskOccursOn(t,dk)) : [];
-                          return (
+                          const isT=day&&day===today.getDate()&&cMonth===today.getMonth()&&cYear===today.getFullYear();
+                          const dateObj=day?new Date(cYear,cMonth,day):null;
+                          const hol=dateObj?isHoliday(dateObj):null;
+                          const dk=day?fmtDate(new Date(cYear,cMonth,day)):null;
+                          const dt=day?allT.filter(t=>taskOccursOn(t,dk)):[];
+                          return(
                             <div key={di}
                               onDragOver={e=>{if(day)e.preventDefault();}}
                               onDrop={e=>{if(day)onCalDrop(e,boardMembers[0]?.id,dk,"8:00");}}
@@ -1016,7 +1093,7 @@ export default function App() {
                                 </div>
                                 {dt.map(t=>{
                                   const cl=clientOf(t.client_id);
-                                  return (
+                                  return(
                                     <div key={t.id} draggable onDragStart={e=>onCalDragStart(e,t)} onDoubleClick={()=>openEdit(t)}
                                       style={{background:t.color||"#E8623A",borderRadius:4,padding:"2px 5px",fontSize:9,color:textOn(t.color||"#E8623A"),marginBottom:2,cursor:"pointer",overflow:"hidden"}}>
                                       <div style={{display:"flex",alignItems:"center",gap:3}}>
@@ -1048,9 +1125,50 @@ export default function App() {
           )}
         </div>
       )}
-
       {settingsOpen&&renderSettings()}
       {modal&&renderModal()}
+    </div>
+  );
+}
+
+// ── Add User Section ──────────────────────────────────────────────────────────
+function AddUserSection() {
+  const [email, setEmail]   = useState("");
+  const [msg, setMsg]       = useState("");
+  const [users, setUsers]   = useState([]);
+
+  useEffect(()=>{
+    supabase.from("allowed_users").select("*").order("created_at").then(({data})=>data&&setUsers(data));
+  },[]);
+
+  const add=async()=>{
+    if(!email.trim())return;
+    const{error}=await supabase.from("allowed_users").insert({email:email.trim().toLowerCase()});
+    if(error){setMsg("Error: ese correo ya existe o hubo un problema.");}
+    else{setMsg(`✓ ${email} agregado correctamente`);setEmail("");supabase.from("allowed_users").select("*").order("created_at").then(({data})=>data&&setUsers(data));}
+    setTimeout(()=>setMsg(""),3000);
+  };
+
+  const remove=async(id,em)=>{
+    await supabase.from("allowed_users").delete().eq("id",id);
+    setUsers(p=>p.filter(u=>u.id!==id));
+  };
+
+  return(
+    <div>
+      <div style={{display:"flex",gap:6,marginBottom:8}}>
+        <input value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}
+          placeholder="correo@ejemplo.com" style={{flex:1,border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C"}}/>
+        <button onClick={add} style={{background:"#E8623A",border:"none",borderRadius:8,color:"#fff",fontSize:13,cursor:"pointer",padding:"6px 14px",fontWeight:600}}>Agregar</button>
+      </div>
+      {msg&&<p style={{fontSize:11,color:msg.startsWith("✓")?"#3A9E8A":"#E8623A",marginBottom:8}}>{msg}</p>}
+      <label style={{...lbS2,marginTop:8}}>Usuarios con acceso</label>
+      {users.map(u=>(
+        <div key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:"#FAFAF9",border:"1px solid #F0EDE8",borderRadius:8,marginBottom:4}}>
+          <span style={{fontSize:12,color:"#555",flex:1}}>{u.email}</span>
+          <button onClick={()=>remove(u.id,u.email)} style={{background:"none",border:"none",color:"#ccc",fontSize:12,cursor:"pointer"}}>✕</button>
+        </div>
+      ))}
     </div>
   );
 }
