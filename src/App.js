@@ -59,8 +59,8 @@ const iBtnS= { background:"none", border:"none", fontSize:17, cursor:"pointer", 
 
 const EMPTY_FORM = { title:"", link:"", status:"pendiente", comments:"", client_id:"", color:"#E8623A", duration:1, assignees:[], assigneeSchedules:[], reference_links:[], is_recurring:false, recurrence_days:[], end_date:"", date:"", hour:HOURS[0] };
 
-// ── Login Screen ──────────────────────────────────────────────────────────────
-function LoginScreen({ onLogin }) {
+// ── Login ─────────────────────────────────────────────────────────────────────
+function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
 
@@ -68,7 +68,7 @@ function LoginScreen({ onLogin }) {
     setLoading(true); setError("");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin }
+      options: { redirectTo: "https://olover-studio.vercel.app" }
     });
     if (error) { setError("Error al iniciar sesión. Intentá de nuevo."); setLoading(false); }
   };
@@ -83,16 +83,16 @@ function LoginScreen({ onLogin }) {
         <p style={{fontSize:9,letterSpacing:3,color:"#bbb",textTransform:"uppercase",marginBottom:6}}>OLOVER Studio</p>
         <p style={{fontFamily:"'DM Serif Display',serif",fontSize:"1.6rem",color:"#1C1C1C",marginBottom:"0.5rem"}}>Crono</p>
         <p style={{fontSize:13,color:"#aaa",marginBottom:"2rem"}}>Gestión de proyectos y equipo</p>
-        {error && <p style={{fontSize:12,color:"#E8623A",marginBottom:"1rem",background:"#FFF0ED",borderRadius:8,padding:"8px 12px"}}>{error}</p>}
+        {error&&<p style={{fontSize:12,color:"#E8623A",marginBottom:"1rem",background:"#FFF0ED",borderRadius:8,padding:"8px 12px"}}>{error}</p>}
         <button onClick={handleGoogle} disabled={loading}
-          style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:10,background:loading?"#f5f5f5":"#fff",border:"1.5px solid #E8E4DE",borderRadius:12,padding:"12px 20px",cursor:loading?"not-allowed":"pointer",fontSize:14,fontWeight:500,color:"#333",transition:"all 0.15s"}}>
+          style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:10,background:loading?"#f5f5f5":"#fff",border:"1.5px solid #E8E4DE",borderRadius:12,padding:"12px 20px",cursor:loading?"not-allowed":"pointer",fontSize:14,fontWeight:500,color:"#333"}}>
           <svg width="18" height="18" viewBox="0 0 18 18">
             <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/>
             <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/>
             <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18z"/>
             <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/>
           </svg>
-          {loading ? "Entrando..." : "Entrar con Google"}
+          {loading?"Entrando...":"Entrar con Google"}
         </button>
         <p style={{fontSize:11,color:"#ccc",marginTop:"1.5rem"}}>Solo usuarios autorizados pueden acceder</p>
       </div>
@@ -100,41 +100,38 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-// ── Main App ──────────────────────────────────────────────────────────────────
+// ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [session, setSession]       = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [session, setSession]           = useState(null);
+  const [authLoading, setAuthLoading]   = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
 
-  // Auth state
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
         const { data } = await supabase.from("allowed_users").select("email").eq("email", session.user.email).single();
-        if (data) { setSession(session); }
+        if (data) setSession(session);
         else { setAccessDenied(true); await supabase.auth.signOut(); }
       }
       setAuthLoading(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
       if (session) {
         const { data } = await supabase.from("allowed_users").select("email").eq("email", session.user.email).single();
         if (data) { setSession(session); setAccessDenied(false); }
         else { setAccessDenied(true); await supabase.auth.signOut(); setSession(null); }
-      } else {
-        setSession(null);
-      }
+      } else setSession(null);
       setAuthLoading(false);
     });
     return () => subscription.unsubscribe();
   }, []);
 
   if (authLoading) return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",flexDirection:"column",gap:12}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",flexDirection:"column",gap:12,fontFamily:"'DM Sans',sans-serif"}}>
       <div style={{width:40,height:40,borderRadius:10,background:"#E8623A",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <span style={{color:"#fff",fontSize:14,fontWeight:700}}>OL</span>
       </div>
-      <p style={{fontSize:13,color:"#aaa",fontFamily:"'DM Sans',sans-serif"}}>Cargando...</p>
+      <p style={{fontSize:13,color:"#aaa"}}>Cargando...</p>
     </div>
   );
 
@@ -143,18 +140,17 @@ export default function App() {
       <div style={{background:"#fff",borderRadius:20,padding:"3rem 2.5rem",width:380,textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.1)"}}>
         <p style={{fontSize:32,marginBottom:"1rem"}}>🔒</p>
         <p style={{fontFamily:"'DM Serif Display',serif",fontSize:"1.3rem",color:"#1C1C1C",marginBottom:"0.5rem"}}>Acceso denegado</p>
-        <p style={{fontSize:13,color:"#aaa",marginBottom:"1.5rem"}}>Tu correo no está autorizado para acceder a Crono.</p>
-        <button onClick={()=>supabase.auth.signOut()} style={{background:"#E8623A",border:"none",borderRadius:10,padding:"10px 20px",fontSize:13,color:"#fff",cursor:"pointer",fontWeight:600}}>Volver al inicio</button>
+        <p style={{fontSize:13,color:"#aaa",marginBottom:"1.5rem"}}>Tu correo no está autorizado.</p>
+        <button onClick={()=>supabase.auth.signOut()} style={{background:"#E8623A",border:"none",borderRadius:10,padding:"10px 20px",fontSize:13,color:"#fff",cursor:"pointer",fontWeight:600}}>Volver</button>
       </div>
     </div>
   );
 
-  if (!session) return <LoginScreen />;
-
-  return <MainApp session={session} />;
+  if (!session) return <LoginScreen/>;
+  return <MainApp session={session}/>;
 }
 
-// ── Main App (authenticated) ──────────────────────────────────────────────────
+// ── Main App ──────────────────────────────────────────────────────────────────
 function MainApp({ session }) {
   const [brand, setBrand]     = useState({ name:"OLOVER Studio", logo:null, navBg:"#111111", sidebarBg:"#1C1C1C", topbarBg:"#ffffff", accent:"#E8623A" });
   const [boards, setBoards]   = useState([]);
@@ -184,23 +180,20 @@ function MainApp({ session }) {
   const [calMonths, setCalMonths]   = useState({ animadores:today.getMonth(), disenadores:today.getMonth(), proveedores:today.getMonth() });
 
   useEffect(() => {
-    const fetchHolidays = async (year) => {
+    const fetch = async (year) => {
       try {
-        const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/CO`);
+        const res = await window.fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/CO`);
         const data = await res.json();
         const map = {};
         data.forEach(h => { map[h.date] = h.localName||h.name; });
         setHolidays(p=>({...p,[year]:map}));
       } catch(e) {}
     };
-    fetchHolidays(today.getFullYear());
-    fetchHolidays(today.getFullYear()+1);
+    fetch(today.getFullYear());
+    fetch(today.getFullYear()+1);
   }, []);
 
-  const isHoliday = (dateObj) => {
-    const iso = fmtDateISO(dateObj);
-    return holidays[dateObj.getFullYear()]?.[iso]||null;
-  };
+  const isHoliday = d => holidays[d.getFullYear()]?.[fmtDateISO(d)]||null;
 
   useEffect(() => {
     async function load() {
@@ -221,10 +214,8 @@ function MainApp({ session }) {
       setLoading(false);
     }
     load();
-
     const reload = (table,setter,query) =>
       supabase.channel(`rt-${table}-${Math.random()}`).on("postgres_changes",{event:"*",schema:"public",table},()=>query().then(({data})=>data&&setter(data))).subscribe();
-
     const c1=reload("tasks",setTasks,()=>supabase.from("tasks").select("*").order("created_at"));
     const c2=reload("task_assignments",setAssignments,()=>supabase.from("task_assignments").select("*"));
     const c3=reload("members",setMembers,()=>supabase.from("members").select("*").order("position"));
@@ -247,31 +238,31 @@ function MainApp({ session }) {
     return members.filter(m=>ids.includes(m.id));
   }, [assignments,members]);
 
-  // KEY FIX: memberTasks uses assignments table, not board_id
   const memberTasks = useCallback((memberId) => {
-    const assignedIds=assignments.filter(a=>a.member_id===memberId).map(a=>a.task_id);
-    return tasks.filter(t=>assignedIds.includes(t.id));
+    const ids=assignments.filter(a=>a.member_id===memberId).map(a=>a.task_id);
+    return tasks.filter(t=>ids.includes(t.id));
   }, [assignments,tasks]);
 
   const boardTasks = useCallback(() => {
     const memberIds=boardMembers.map(m=>m.id);
-    const assignedTaskIds=new Set(assignments.filter(a=>memberIds.includes(a.member_id)).map(a=>a.task_id));
-    return tasks.filter(t=>assignedTaskIds.has(t.id));
+    const ids=new Set(assignments.filter(a=>memberIds.includes(a.member_id)).map(a=>a.task_id));
+    return tasks.filter(t=>ids.has(t.id));
   }, [assignments,tasks,boardMembers]);
 
   const allTasksForSidebar = useCallback(() => {
     const memberIds=boardMembers.map(m=>m.id);
-    const assignedTaskIds=new Set(assignments.filter(a=>memberIds.includes(a.member_id)).map(a=>a.task_id));
+    const ids=new Set(assignments.filter(a=>memberIds.includes(a.member_id)).map(a=>a.task_id));
     const unassigned=tasks.filter(t=>t.board_id===boardId&&assignments.filter(a=>a.task_id===t.id).length===0);
-    const assigned=tasks.filter(t=>assignedTaskIds.has(t.id));
+    const assigned=tasks.filter(t=>ids.has(t.id));
     return [...new Map([...unassigned,...assigned].map(t=>[t.id,t])).values()];
   }, [assignments,tasks,boardMembers,boardId]);
 
-  // KEY FIX: always use assignee_schedules for per-member date/hour
+  // KEY FIX: get per-member schedule, fallback to task date/hour
   const getMemberSchedule = (task, memberId) => {
-    const s=(task.assignee_schedules||[]).find(s=>s.memberId===memberId);
-    if (s&&s.date) return s;
-    return {date:task.date, hour:task.hour||HOURS[0]};
+    const schedules = task.assignee_schedules||[];
+    const s = schedules.find(s=>s.memberId===memberId&&s.date);
+    if (s) return s;
+    return { date: task.date, hour: task.hour||HOURS[0] };
   };
 
   const clientOf=id=>clients.find(c=>c.id===id);
@@ -296,21 +287,25 @@ function MainApp({ session }) {
     const id=uid();
     const {assignees=[],assigneeSchedules=[],reference_links=[],...rest}=form;
     const allAssignees=[...new Set([...(memberId?[memberId]:[]),...assignees])];
-    // KEY FIX: build schedules with correct date/hour per member
+
+    // KEY FIX: build schedules ensuring date and hour are always set
     const schedules=allAssignees.map(mid=>{
       const found=assigneeSchedules.find(s=>s.memberId===mid);
-      return {memberId:mid,date:found?.date||date||null,hour:found?.hour||hour||HOURS[0]};
+      const d = found?.date||date||null;
+      const h = found?.hour||hour||HOURS[0];
+      return {memberId:mid, date:d, hour:h};
     });
-    // Use first assignee's schedule as the task's main date/hour
-    const mainDate=schedules[0]?.date||date||null;
-    const mainHour=schedules[0]?.hour||hour||HOURS[0];
+
+    const mainDate = schedules[0]?.date||date||null;
+    const mainHour = schedules[0]?.hour||hour||HOURS[0];
+
     await supabase.from("tasks").insert({
-      id,member_id:allAssignees[0]||null,board_id:boardId,
-      title:rest.title||"Sin título",status:rest.status||"pendiente",
-      link:rest.link||"",comments:rest.comments||"",
-      client_id:rest.client_id||"",color:rest.color||"#E8623A",
-      duration:rest.duration||1,reference_links,
-      date:mainDate,hour:mainHour,
+      id, member_id:allAssignees[0]||null, board_id:boardId,
+      title:rest.title||"Sin título", status:rest.status||"pendiente",
+      link:rest.link||"", comments:rest.comments||"",
+      client_id:rest.client_id||"", color:rest.color||"#E8623A",
+      duration:rest.duration||1, reference_links,
+      date:mainDate, hour:mainHour,
       assignee_schedules:schedules,
       is_recurring:rest.is_recurring||false,
       recurrence_days:rest.recurrence_days||[],
@@ -324,23 +319,26 @@ function MainApp({ session }) {
     if (!quickTitle.trim()) return;
     const id=uid();
     await supabase.from("tasks").insert({
-      id,board_id:boardId,title:quickTitle.trim(),status:"pendiente",
-      color:"#E8623A",duration:1,reference_links:[],assignee_schedules:[],
-      is_recurring:false,recurrence_days:[],
+      id, board_id:boardId, title:quickTitle.trim(), status:"pendiente",
+      color:"#E8623A", duration:1, reference_links:[], assignee_schedules:[],
+      is_recurring:false, recurrence_days:[],
     });
     setQuickTitle("");
   };
 
-  const updateTask = async (id,patch) => {
+  const updateTask = async (id, patch) => {
     const {assignees,assigneeSchedules,...rest}=patch;
-    const fm={title:"title",status:"status",link:"link",date:"date",hour:"hour",end_date:"end_date",comments:"comments",client_id:"client_id",color:"color",duration:"duration",reference_links:"reference_links",memberId:"member_id",assignee_schedules:"assignee_schedules",is_recurring:"is_recurring",recurrence_days:"recurrence_days"};
+    const fm={title:"title",status:"status",link:"link",date:"date",hour:"hour",end_date:"end_date",comments:"comments",client_id:"client_id",color:"color",duration:"duration",reference_links:"reference_links",memberId:"member_id",is_recurring:"is_recurring",recurrence_days:"recurrence_days"};
     const db={};
     Object.keys(rest).forEach(k=>{if(fm[k])db[fm[k]]=rest[k];});
-    if (assigneeSchedules) db.assignee_schedules=assigneeSchedules;
-    // KEY FIX: always sync main date/hour from first assignee schedule
-    if (assigneeSchedules&&assigneeSchedules.length>0) {
-      db.date=assigneeSchedules[0].date||null;
-      db.hour=assigneeSchedules[0].hour||HOURS[0];
+
+    // KEY FIX: always save assignee_schedules and sync main date/hour
+    if (assigneeSchedules) {
+      db.assignee_schedules=assigneeSchedules;
+      if (assigneeSchedules.length>0&&assigneeSchedules[0].date) {
+        db.date=assigneeSchedules[0].date;
+        db.hour=assigneeSchedules[0].hour||HOURS[0];
+      }
     }
     if (Object.keys(db).length>0) await supabase.from("tasks").update(db).eq("id",id);
     if (assignees!==undefined) {
@@ -386,26 +384,33 @@ function MainApp({ session }) {
   };
 
   // ── Modal ──
+  // KEY FIX: openAdd always sets correct date/hour in schedules
   const openAdd=(memberId,date,hour)=>{
-    setModal({mode:"add",memberId,date,hour});
-    const schedules=memberId?[{memberId,date:date||"",hour:hour||HOURS[0]}]:[];
-    setModalForm({...EMPTY_FORM,assignees:memberId?[memberId]:[],assigneeSchedules:schedules,date:date||"",hour:hour||HOURS[0]});
+    const d=date||"";
+    const h=hour||HOURS[0];
+    setModal({mode:"add",memberId,date:d,hour:h});
+    const schedules=memberId?[{memberId,date:d,hour:h}]:[];
+    setModalForm({...EMPTY_FORM,assignees:memberId?[memberId]:[],assigneeSchedules:schedules,date:d,hour:h});
   };
 
+  // KEY FIX: openEdit loads correct date/hour from assignee_schedules
   const openEdit=task=>{
     const assigneeIds=assignments.filter(a=>a.task_id===task.id).map(a=>a.member_id);
     const schedules=assigneeIds.map(mid=>{
-      const found=(task.assignee_schedules||[]).find(s=>s.memberId===mid);
-      return {memberId:mid,date:found?.date||task.date||"",hour:found?.hour||task.hour||HOURS[0]};
+      const found=(task.assignee_schedules||[]).find(s=>s.memberId===mid&&s.date);
+      return {memberId:mid, date:found?.date||task.date||"", hour:found?.hour||task.hour||HOURS[0]};
     });
     setModal({mode:"edit",task});
+    // KEY FIX: load hour from task, not default
+    const mainHour = schedules[0]?.hour||task.hour||HOURS[0];
+    const mainDate = schedules[0]?.date||task.date||"";
     setModalForm({
-      title:task.title,link:task.link||"",status:task.status||"pendiente",
-      comments:task.comments||"",client_id:task.client_id||"",
-      color:task.color||"#E8623A",duration:task.duration||1,
-      assignees:assigneeIds,assigneeSchedules:schedules,
+      title:task.title, link:task.link||"", status:task.status||"pendiente",
+      comments:task.comments||"", client_id:task.client_id||"",
+      color:task.color||"#E8623A", duration:task.duration||1,
+      assignees:assigneeIds, assigneeSchedules:schedules,
       reference_links:task.reference_links||[],
-      date:task.date||"",hour:task.hour||HOURS[0],
+      date:mainDate, hour:mainHour,
       end_date:task.end_date||"",
       is_recurring:task.is_recurring||false,
       recurrence_days:task.recurrence_days||[],
@@ -417,15 +422,21 @@ function MainApp({ session }) {
     if(modal.mode==="add"){
       await addTask(modalForm,modal.memberId,modalForm.date,modalForm.hour);
     } else {
+      // KEY FIX: build updated schedules with current form values
+      const updatedSchedules=modalForm.assigneeSchedules.map(s=>({
+        ...s,
+        date:s.date||modalForm.date||null,
+        hour:s.hour||modalForm.hour||HOURS[0],
+      }));
       await updateTask(modal.task.id,{
-        title:modalForm.title,link:modalForm.link,status:modalForm.status,
-        comments:modalForm.comments,client_id:modalForm.client_id,
-        color:modalForm.color,duration:modalForm.duration,
+        title:modalForm.title, link:modalForm.link, status:modalForm.status,
+        comments:modalForm.comments, client_id:modalForm.client_id,
+        color:modalForm.color, duration:modalForm.duration,
         reference_links:modalForm.reference_links,
         assignees:modalForm.assignees,
-        assigneeSchedules:modalForm.assigneeSchedules,
-        date:modalForm.is_recurring?null:(modalForm.assigneeSchedules[0]?.date||modalForm.date||null),
-        hour:modalForm.assigneeSchedules[0]?.hour||modalForm.hour,
+        assigneeSchedules:updatedSchedules,
+        date:modalForm.is_recurring?null:(updatedSchedules[0]?.date||modalForm.date||null),
+        hour:updatedSchedules[0]?.hour||modalForm.hour||HOURS[0],
         end_date:modalForm.end_date||null,
         is_recurring:modalForm.is_recurring,
         recurrence_days:modalForm.recurrence_days,
@@ -436,10 +447,13 @@ function MainApp({ session }) {
 
   const setField=(k,v)=>setModalForm(p=>({...p,[k]:v}));
 
+  // KEY FIX: toggleAssignee inherits current form date/hour
   const toggleAssignee=(mid)=>{
     const sel=modalForm.assignees.includes(mid);
     const newA=sel?modalForm.assignees.filter(id=>id!==mid):[...modalForm.assignees,mid];
-    const newS=sel?modalForm.assigneeSchedules.filter(s=>s.memberId!==mid):[...modalForm.assigneeSchedules,{memberId:mid,date:modalForm.date||"",hour:modalForm.hour||HOURS[0]}];
+    const newS=sel
+      ?modalForm.assigneeSchedules.filter(s=>s.memberId!==mid)
+      :[...modalForm.assigneeSchedules,{memberId:mid,date:modalForm.date||"",hour:modalForm.hour||HOURS[0]}];
     setModalForm(p=>({...p,assignees:newA,assigneeSchedules:newS}));
   };
 
@@ -465,8 +479,8 @@ function MainApp({ session }) {
     const newAssignees=[...crossBoard,memberId];
     const newSchedules=newAssignees.map(mid=>{
       if(mid===memberId)return{memberId,date,hour};
-      const found=(t.assignee_schedules||[]).find(s=>s.memberId===mid);
-      return found||{memberId:mid,date:t.date,hour:t.hour};
+      const found=(t.assignee_schedules||[]).find(s=>s.memberId===mid&&s.date);
+      return found||{memberId:mid,date:t.date,hour:t.hour||HOURS[0]};
     });
     await updateTask(t.id,{date,hour,memberId,assignees:newAssignees,assigneeSchedules:newSchedules});
     dragTask.current=null;
@@ -480,7 +494,7 @@ function MainApp({ session }) {
   };
 
   if(loading)return(
-    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",flexDirection:"column",gap:12}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",flexDirection:"column",gap:12,fontFamily:"'DM Sans',sans-serif"}}>
       <div style={{width:40,height:40,borderRadius:10,background:"#E8623A",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <span style={{color:"#fff",fontSize:14,fontWeight:700}}>OL</span>
       </div>
@@ -696,7 +710,7 @@ function MainApp({ session }) {
                 </div>
                 <button onClick={()=>supabase.auth.signOut()} style={{marginLeft:"auto",background:"none",border:"1px solid #FFD0C8",borderRadius:8,padding:"5px 12px",fontSize:11,color:"#E8623A",cursor:"pointer"}}>Cerrar sesión</button>
               </div>
-              <label style={lbS2}>Agregar usuario autorizado</label>
+              <label style={lbS2}>Usuarios autorizados</label>
               <AddUserSection/>
             </div>
           )}
@@ -708,7 +722,7 @@ function MainApp({ session }) {
     </div>
   );
 
-  // ── Modal ──
+  // ── Task Modal ──
   const renderModal=()=>{
     const isEdit=modal.mode==="edit";
     const refLinks=modalForm.reference_links||[];
@@ -817,8 +831,11 @@ function MainApp({ session }) {
             <div style={{display:"flex",gap:12,marginBottom:"1.1rem"}}>
               <div style={{flex:1}}>
                 <label style={lbS}>Fecha inicio</label>
-                <input type="date" value={modalForm.date||""} onChange={e=>setField("date",e.target.value)}
-                  style={{...inS,borderBottomColor:"#E8E4DE",fontSize:13}}/>
+                <input type="date" value={modalForm.date||""} onChange={e=>{
+                  setField("date",e.target.value);
+                  // KEY FIX: sync date change to all assignee schedules
+                  setModalForm(p=>({...p,date:e.target.value,assigneeSchedules:p.assigneeSchedules.map(s=>({...s,date:e.target.value}))}));
+                }} style={{...inS,borderBottomColor:"#E8E4DE",fontSize:13}}/>
               </div>
               <div style={{flex:1}}>
                 <label style={lbS}>Fecha fin <span style={{color:"#bbb",fontWeight:400}}>(opcional)</span></label>
@@ -828,8 +845,11 @@ function MainApp({ session }) {
               {!modalForm.end_date&&(
                 <div style={{flex:1}}>
                   <label style={lbS}>Hora</label>
-                  <select value={modalForm.hour||HOURS[0]} onChange={e=>setField("hour",e.target.value)}
-                    style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer"}}>
+                  <select value={modalForm.hour||HOURS[0]} onChange={e=>{
+                    setField("hour",e.target.value);
+                    // KEY FIX: sync hour change to all assignee schedules
+                    setModalForm(p=>({...p,hour:e.target.value,assigneeSchedules:p.assigneeSchedules.map(s=>({...s,hour:e.target.value}))}));
+                  }} style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer"}}>
                     {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
                   </select>
                 </div>
@@ -897,7 +917,6 @@ function MainApp({ session }) {
   return(
     <div style={{display:"flex",height:"100vh",background:"#F4F2EE",fontFamily:"'DM Sans',sans-serif",overflow:"hidden"}}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
-      {/* Left nav */}
       <div style={{width:64,background:brand.navBg,display:"flex",flexDirection:"column",alignItems:"center",paddingTop:14,gap:4,zIndex:20,flexShrink:0}}>
         <div style={{width:38,height:38,borderRadius:10,background:brand.logo?"transparent":brand.accent,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,overflow:"hidden",flexShrink:0}}>
           {brand.logo?<img src={brand.logo} alt="logo" style={{width:"100%",height:"100%",objectFit:"contain"}}/>:<span style={{color:textOn(brand.accent),fontSize:12,fontWeight:700}}>{brand.name.slice(0,2).toUpperCase()}</span>}
@@ -912,7 +931,6 @@ function MainApp({ session }) {
         <button onClick={()=>setSettingsOpen(true)} style={{width:44,height:44,borderRadius:12,border:"none",cursor:"pointer",background:"transparent",color:"#555",fontSize:18,marginBottom:4}}>⚙</button>
         <button onClick={()=>setSidebarOpen(o=>!o)} style={{width:44,height:44,borderRadius:12,border:"none",cursor:"pointer",background:"transparent",color:"#555",fontSize:18,marginBottom:12}}>☰</button>
       </div>
-      {/* Sidebar */}
       {sidebarOpen&&board&&(
         <div style={{width:270,background:brand.sidebarBg,display:"flex",flexDirection:"column",zIndex:10,flexShrink:0}}>
           <div style={{padding:"1.1rem 1rem 0.75rem",borderBottom:"1px solid #2a2a2a"}}>
@@ -954,7 +972,6 @@ function MainApp({ session }) {
           </div>
         </div>
       )}
-      {/* Main */}
       {board&&(
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <div style={{background:brand.topbarBg,borderBottom:"1px solid #E8E4DE",padding:"0.6rem 1.25rem",display:"flex",alignItems:"center",gap:"0.75rem",flexWrap:"wrap"}}>
@@ -997,7 +1014,6 @@ function MainApp({ session }) {
             <button onClick={()=>setSettingsOpen(true)} style={{...iBtnS,background:brand.accent+"18",borderRadius:8,border:`1px solid ${brand.accent}55`,color:brand.accent,fontSize:12,padding:"4px 10px",fontWeight:500}}>⚙ Personalizar</button>
           </div>
 
-          {/* Weekly */}
           {view==="weekly"&&(
             <div style={{flex:1,overflowY:"auto",padding:"1rem"}}>
               {boardMembers.map(m=>{
@@ -1030,7 +1046,6 @@ function MainApp({ session }) {
                           <div key={hour+"L"} style={{height:HOUR_H,padding:"5px 4px",fontSize:9,color:"#ccc",textAlign:"right",borderTop:"1px solid #F0EDE8",background:"#FAFAF9",display:"flex",alignItems:"flex-start",justifyContent:"flex-end"}}>{hour}</div>
                           {weekDates.map((d,di)=>{
                             const dk=fmtDate(d);
-                            // KEY FIX: use getMemberSchedule for per-member hour matching
                             const ct=mTasks.filter(t=>{
                               if(!taskOccursOn(t,dk))return false;
                               if(t.is_recurring)return(t.hour||HOURS[0])===hour;
@@ -1056,7 +1071,6 @@ function MainApp({ session }) {
             </div>
           )}
 
-          {/* Monthly */}
           {view==="monthly"&&(
             <div style={{flex:1,overflowY:"auto",padding:"1rem"}}>
               {(()=>{
@@ -1133,9 +1147,9 @@ function MainApp({ session }) {
 
 // ── Add User Section ──────────────────────────────────────────────────────────
 function AddUserSection() {
-  const [email, setEmail]   = useState("");
-  const [msg, setMsg]       = useState("");
-  const [users, setUsers]   = useState([]);
+  const [email, setEmail] = useState("");
+  const [msg, setMsg]     = useState("");
+  const [users, setUsers] = useState([]);
 
   useEffect(()=>{
     supabase.from("allowed_users").select("*").order("created_at").then(({data})=>data&&setUsers(data));
@@ -1144,12 +1158,16 @@ function AddUserSection() {
   const add=async()=>{
     if(!email.trim())return;
     const{error}=await supabase.from("allowed_users").insert({email:email.trim().toLowerCase()});
-    if(error){setMsg("Error: ese correo ya existe o hubo un problema.");}
-    else{setMsg(`✓ ${email} agregado correctamente`);setEmail("");supabase.from("allowed_users").select("*").order("created_at").then(({data})=>data&&setUsers(data));}
+    if(error)setMsg("Error: ese correo ya existe o hubo un problema.");
+    else{
+      setMsg(`✓ ${email} agregado`);
+      setEmail("");
+      supabase.from("allowed_users").select("*").order("created_at").then(({data})=>data&&setUsers(data));
+    }
     setTimeout(()=>setMsg(""),3000);
   };
 
-  const remove=async(id,em)=>{
+  const remove=async(id)=>{
     await supabase.from("allowed_users").delete().eq("id",id);
     setUsers(p=>p.filter(u=>u.id!==id));
   };
@@ -1162,11 +1180,10 @@ function AddUserSection() {
         <button onClick={add} style={{background:"#E8623A",border:"none",borderRadius:8,color:"#fff",fontSize:13,cursor:"pointer",padding:"6px 14px",fontWeight:600}}>Agregar</button>
       </div>
       {msg&&<p style={{fontSize:11,color:msg.startsWith("✓")?"#3A9E8A":"#E8623A",marginBottom:8}}>{msg}</p>}
-      <label style={{...lbS2,marginTop:8}}>Usuarios con acceso</label>
       {users.map(u=>(
         <div key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:"#FAFAF9",border:"1px solid #F0EDE8",borderRadius:8,marginBottom:4}}>
           <span style={{fontSize:12,color:"#555",flex:1}}>{u.email}</span>
-          <button onClick={()=>remove(u.id,u.email)} style={{background:"none",border:"none",color:"#ccc",fontSize:12,cursor:"pointer"}}>✕</button>
+          <button onClick={()=>remove(u.id)} style={{background:"none",border:"none",color:"#ccc",fontSize:12,cursor:"pointer"}}>✕</button>
         </div>
       ))}
     </div>
