@@ -107,7 +107,33 @@ export default function App() {
   const [accessDenied, setAccessDenied] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    const init = async () => {
+      try {
+        const { data: { session } } = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+        ]);
+        if (session) {
+          const { data } = await supabase.from("allowed_users").select("email").eq("email", session.user.email).single();
+          if (data) setSession(session);
+          else { setAccessDenied(true); await supabase.auth.signOut(); }
+        }
+      } catch(e) {
+        console.log('Auth error:', e);
+      }
+      setAuthLoading(false);
+    };
+    init();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
+      if (session) {
+        const { data } = await supabase.from("allowed_users").select("email").eq("email", session.user.email).single();
+        if (data) { setSession(session); setAccessDenied(false); }
+        else { setAccessDenied(true); await supabase.auth.signOut(); setSession(null); }
+      } else setSession(null);
+      setAuthLoading(false);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
       if (session) {
         const { data } = await supabase.from("allowed_users").select("email").eq("email", session.user.email).single();
         if (data) setSession(session);
