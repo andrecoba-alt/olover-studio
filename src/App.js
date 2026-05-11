@@ -65,12 +65,16 @@ function LoginScreen() {
   const [error, setError]     = useState("");
 
   const handleGoogle = async () => {
-    setLoading(true); setError("");
+    setLoading(true);
+    setError("");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: "https://olover-studio.vercel.app" }
     });
-    if (error) { setError("Error al iniciar sesión. Intentá de nuevo."); setLoading(false); }
+    if (error) {
+      setError("Error al iniciar sesión. Intentá de nuevo.");
+      setLoading(false);
+    }
   };
 
   return (
@@ -109,44 +113,27 @@ export default function App() {
   useEffect(() => {
     const init = async () => {
       try {
-        const { data: { session } } = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
-        ]);
+        const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           const { data } = await supabase.from("allowed_users").select("email").eq("email", session.user.email).single();
           if (data) setSession(session);
-          else { setAccessDenied(true); await supabase.auth.signOut(); }
+          else { setAccessDenied(true); supabase.auth.signOut(); }
         }
       } catch(e) {
-        console.log('Auth error:', e);
+        console.log("Auth init error:", e);
       }
       setAuthLoading(false);
     };
     init();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
       if (session) {
         const { data } = await supabase.from("allowed_users").select("email").eq("email", session.user.email).single();
         if (data) { setSession(session); setAccessDenied(false); }
-        else { setAccessDenied(true); await supabase.auth.signOut(); setSession(null); }
-      } else setSession(null);
-      setAuthLoading(false);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-      if (session) {
-        const { data } = await supabase.from("allowed_users").select("email").eq("email", session.user.email).single();
-        if (data) setSession(session);
-        else { setAccessDenied(true); await supabase.auth.signOut(); }
+        else { setAccessDenied(true); supabase.auth.signOut(); setSession(null); }
+      } else {
+        setSession(null);
       }
-      setAuthLoading(false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
-      if (session) {
-        const { data } = await supabase.from("allowed_users").select("email").eq("email", session.user.email).single();
-        if (data) { setSession(session); setAccessDenied(false); }
-        else { setAccessDenied(true); await supabase.auth.signOut(); setSession(null); }
-      } else setSession(null);
       setAuthLoading(false);
     });
     return () => subscription.unsubscribe();
@@ -154,6 +141,7 @@ export default function App() {
 
   if (authLoading) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#F4F2EE",flexDirection:"column",gap:12,fontFamily:"'DM Sans',sans-serif"}}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
       <div style={{width:40,height:40,borderRadius:10,background:"#E8623A",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <span style={{color:"#fff",fontSize:14,fontWeight:700}}>OL</span>
       </div>
@@ -206,7 +194,7 @@ function MainApp({ session }) {
   const [calMonths, setCalMonths]   = useState({ animadores:today.getMonth(), disenadores:today.getMonth(), proveedores:today.getMonth() });
 
   useEffect(() => {
-    const fetch = async (year) => {
+    const fetchHols = async (year) => {
       try {
         const res = await window.fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/CO`);
         const data = await res.json();
@@ -215,14 +203,14 @@ function MainApp({ session }) {
         setHolidays(p=>({...p,[year]:map}));
       } catch(e) {}
     };
-    fetch(today.getFullYear());
-    fetch(today.getFullYear()+1);
+    fetchHols(today.getFullYear());
+    fetchHols(today.getFullYear()+1);
   }, []);
 
   const isHoliday = d => holidays[d.getFullYear()]?.[fmtDateISO(d)]||null;
 
   useEffect(() => {
-    async function load() {
+    const load = async () => {
       const [{ data:br },{ data:bo },{ data:me },{ data:ta },{ data:as },{ data:cl }] = await Promise.all([
         supabase.from("brand").select("*").single(),
         supabase.from("boards").select("*").order("position"),
@@ -238,10 +226,12 @@ function MainApp({ session }) {
       if (as) setAssignments(as);
       if (cl) setClients(cl);
       setLoading(false);
-    }
+    };
     load();
+
     const reload = (table,setter,query) =>
       supabase.channel(`rt-${table}-${Math.random()}`).on("postgres_changes",{event:"*",schema:"public",table},()=>query().then(({data})=>data&&setter(data))).subscribe();
+
     const c1=reload("tasks",setTasks,()=>supabase.from("tasks").select("*").order("created_at"));
     const c2=reload("task_assignments",setAssignments,()=>supabase.from("task_assignments").select("*"));
     const c3=reload("members",setMembers,()=>supabase.from("members").select("*").order("position"));
@@ -283,12 +273,9 @@ function MainApp({ session }) {
     return [...new Map([...unassigned,...assigned].map(t=>[t.id,t])).values()];
   }, [assignments,tasks,boardMembers,boardId]);
 
-  // KEY FIX: get per-member schedule, fallback to task date/hour
   const getMemberSchedule = (task, memberId) => {
-    const schedules = task.assignee_schedules||[];
-    const s = schedules.find(s=>s.memberId===memberId&&s.date);
-    if (s) return s;
-    return { date: task.date, hour: task.hour||HOURS[0] };
+    const s=(task.assignee_schedules||[]).find(s=>s.memberId===memberId&&s.date);
+    return s||{date:task.date,hour:task.hour||HOURS[0]};
   };
 
   const clientOf=id=>clients.find(c=>c.id===id);
@@ -308,30 +295,23 @@ function MainApp({ session }) {
   const prevMonth = () => { if(cMonth===0){setCMonth(11);setCYear(y=>y-1);}else setCMonth(m=>m-1); };
   const nextMonth = () => { if(cMonth===11){setCMonth(0);setCYear(y=>y+1);}else setCMonth(m=>m+1); };
 
-  // ── CRUD ──
   const addTask = async (form, memberId, date, hour) => {
     const id=uid();
     const {assignees=[],assigneeSchedules=[],reference_links=[],...rest}=form;
     const allAssignees=[...new Set([...(memberId?[memberId]:[]),...assignees])];
-
-    // KEY FIX: build schedules ensuring date and hour are always set
     const schedules=allAssignees.map(mid=>{
       const found=assigneeSchedules.find(s=>s.memberId===mid);
-      const d = found?.date||date||null;
-      const h = found?.hour||hour||HOURS[0];
-      return {memberId:mid, date:d, hour:h};
+      return {memberId:mid,date:found?.date||date||null,hour:found?.hour||hour||HOURS[0]};
     });
-
-    const mainDate = schedules[0]?.date||date||null;
-    const mainHour = schedules[0]?.hour||hour||HOURS[0];
-
+    const mainDate=schedules[0]?.date||date||null;
+    const mainHour=schedules[0]?.hour||hour||HOURS[0];
     await supabase.from("tasks").insert({
-      id, member_id:allAssignees[0]||null, board_id:boardId,
-      title:rest.title||"Sin título", status:rest.status||"pendiente",
-      link:rest.link||"", comments:rest.comments||"",
-      client_id:rest.client_id||"", color:rest.color||"#E8623A",
-      duration:rest.duration||1, reference_links,
-      date:mainDate, hour:mainHour,
+      id,member_id:allAssignees[0]||null,board_id:boardId,
+      title:rest.title||"Sin título",status:rest.status||"pendiente",
+      link:rest.link||"",comments:rest.comments||"",
+      client_id:rest.client_id||"",color:rest.color||"#E8623A",
+      duration:rest.duration||1,reference_links,
+      date:mainDate,hour:mainHour,
       assignee_schedules:schedules,
       is_recurring:rest.is_recurring||false,
       recurrence_days:rest.recurrence_days||[],
@@ -345,20 +325,18 @@ function MainApp({ session }) {
     if (!quickTitle.trim()) return;
     const id=uid();
     await supabase.from("tasks").insert({
-      id, board_id:boardId, title:quickTitle.trim(), status:"pendiente",
-      color:"#E8623A", duration:1, reference_links:[], assignee_schedules:[],
-      is_recurring:false, recurrence_days:[],
+      id,board_id:boardId,title:quickTitle.trim(),status:"pendiente",
+      color:"#E8623A",duration:1,reference_links:[],assignee_schedules:[],
+      is_recurring:false,recurrence_days:[],
     });
     setQuickTitle("");
   };
 
-  const updateTask = async (id, patch) => {
+  const updateTask = async (id,patch) => {
     const {assignees,assigneeSchedules,...rest}=patch;
     const fm={title:"title",status:"status",link:"link",date:"date",hour:"hour",end_date:"end_date",comments:"comments",client_id:"client_id",color:"color",duration:"duration",reference_links:"reference_links",memberId:"member_id",is_recurring:"is_recurring",recurrence_days:"recurrence_days"};
     const db={};
     Object.keys(rest).forEach(k=>{if(fm[k])db[fm[k]]=rest[k];});
-
-    // KEY FIX: always save assignee_schedules and sync main date/hour
     if (assigneeSchedules) {
       db.assignee_schedules=assigneeSchedules;
       if (assigneeSchedules.length>0&&assigneeSchedules[0].date) {
@@ -409,8 +387,6 @@ function MainApp({ session }) {
     await supabase.from("brand").update({name:b.name,logo:b.logo,nav_bg:b.navBg,sidebar_bg:b.sidebarBg,topbar_bg:b.topbarBg,accent:b.accent}).eq("id",data.id);
   };
 
-  // ── Modal ──
-  // KEY FIX: openAdd always sets correct date/hour in schedules
   const openAdd=(memberId,date,hour)=>{
     const d=date||"";
     const h=hour||HOURS[0];
@@ -419,24 +395,22 @@ function MainApp({ session }) {
     setModalForm({...EMPTY_FORM,assignees:memberId?[memberId]:[],assigneeSchedules:schedules,date:d,hour:h});
   };
 
-  // KEY FIX: openEdit loads correct date/hour from assignee_schedules
   const openEdit=task=>{
     const assigneeIds=assignments.filter(a=>a.task_id===task.id).map(a=>a.member_id);
     const schedules=assigneeIds.map(mid=>{
       const found=(task.assignee_schedules||[]).find(s=>s.memberId===mid&&s.date);
-      return {memberId:mid, date:found?.date||task.date||"", hour:found?.hour||task.hour||HOURS[0]};
+      return {memberId:mid,date:found?.date||task.date||"",hour:found?.hour||task.hour||HOURS[0]};
     });
+    const mainHour=schedules[0]?.hour||task.hour||HOURS[0];
+    const mainDate=schedules[0]?.date||task.date||"";
     setModal({mode:"edit",task});
-    // KEY FIX: load hour from task, not default
-    const mainHour = schedules[0]?.hour||task.hour||HOURS[0];
-    const mainDate = schedules[0]?.date||task.date||"";
     setModalForm({
-      title:task.title, link:task.link||"", status:task.status||"pendiente",
-      comments:task.comments||"", client_id:task.client_id||"",
-      color:task.color||"#E8623A", duration:task.duration||1,
-      assignees:assigneeIds, assigneeSchedules:schedules,
+      title:task.title,link:task.link||"",status:task.status||"pendiente",
+      comments:task.comments||"",client_id:task.client_id||"",
+      color:task.color||"#E8623A",duration:task.duration||1,
+      assignees:assigneeIds,assigneeSchedules:schedules,
       reference_links:task.reference_links||[],
-      date:mainDate, hour:mainHour,
+      date:mainDate,hour:mainHour,
       end_date:task.end_date||"",
       is_recurring:task.is_recurring||false,
       recurrence_days:task.recurrence_days||[],
@@ -448,16 +422,13 @@ function MainApp({ session }) {
     if(modal.mode==="add"){
       await addTask(modalForm,modal.memberId,modalForm.date,modalForm.hour);
     } else {
-      // KEY FIX: build updated schedules with current form values
       const updatedSchedules=modalForm.assigneeSchedules.map(s=>({
-        ...s,
-        date:s.date||modalForm.date||null,
-        hour:s.hour||modalForm.hour||HOURS[0],
+        ...s,date:s.date||modalForm.date||null,hour:s.hour||modalForm.hour||HOURS[0],
       }));
       await updateTask(modal.task.id,{
-        title:modalForm.title, link:modalForm.link, status:modalForm.status,
-        comments:modalForm.comments, client_id:modalForm.client_id,
-        color:modalForm.color, duration:modalForm.duration,
+        title:modalForm.title,link:modalForm.link,status:modalForm.status,
+        comments:modalForm.comments,client_id:modalForm.client_id,
+        color:modalForm.color,duration:modalForm.duration,
         reference_links:modalForm.reference_links,
         assignees:modalForm.assignees,
         assigneeSchedules:updatedSchedules,
@@ -473,7 +444,6 @@ function MainApp({ session }) {
 
   const setField=(k,v)=>setModalForm(p=>({...p,[k]:v}));
 
-  // KEY FIX: toggleAssignee inherits current form date/hour
   const toggleAssignee=(mid)=>{
     const sel=modalForm.assignees.includes(mid);
     const newA=sel?modalForm.assignees.filter(id=>id!==mid):[...modalForm.assignees,mid];
@@ -492,7 +462,6 @@ function MainApp({ session }) {
     setField("recurrence_days",days.includes(day)?days.filter(d=>d!==day):[...days,day]);
   };
 
-  // ── Drag ──
   const dragTask=useRef(null);
   const onCalDragStart=(e,task)=>{e.stopPropagation();dragTask.current={task};};
   const onCalDrop=async(e,memberId,date,hour)=>{
@@ -528,7 +497,6 @@ function MainApp({ session }) {
     </div>
   );
 
-  // ── Sidebar Tasks ──
   const SidebarTasks=()=>{
     const allT=allTasksForSidebar();
     const filtered=filterClient?allT.filter(t=>t.client_id===filterClient):allT;
@@ -587,7 +555,6 @@ function MainApp({ session }) {
     );
   };
 
-  // ── Task Block ──
   const TaskBlock=({t})=>{
     const cl=clientOf(t.client_id);
     const dur=t.duration||1;
@@ -603,7 +570,6 @@ function MainApp({ session }) {
     );
   };
 
-  // ── Settings ──
   const renderSettings=()=>(
     <div onClick={()=>setSettingsOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,width:540,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column"}}>
@@ -748,7 +714,6 @@ function MainApp({ session }) {
     </div>
   );
 
-  // ── Task Modal ──
   const renderModal=()=>{
     const isEdit=modal.mode==="edit";
     const refLinks=modalForm.reference_links||[];
@@ -858,9 +823,8 @@ function MainApp({ session }) {
               <div style={{flex:1}}>
                 <label style={lbS}>Fecha inicio</label>
                 <input type="date" value={modalForm.date||""} onChange={e=>{
-                  setField("date",e.target.value);
-                  // KEY FIX: sync date change to all assignee schedules
-                  setModalForm(p=>({...p,date:e.target.value,assigneeSchedules:p.assigneeSchedules.map(s=>({...s,date:e.target.value}))}));
+                  const val=e.target.value;
+                  setModalForm(p=>({...p,date:val,assigneeSchedules:p.assigneeSchedules.map(s=>({...s,date:val}))}));
                 }} style={{...inS,borderBottomColor:"#E8E4DE",fontSize:13}}/>
               </div>
               <div style={{flex:1}}>
@@ -872,9 +836,8 @@ function MainApp({ session }) {
                 <div style={{flex:1}}>
                   <label style={lbS}>Hora</label>
                   <select value={modalForm.hour||HOURS[0]} onChange={e=>{
-                    setField("hour",e.target.value);
-                    // KEY FIX: sync hour change to all assignee schedules
-                    setModalForm(p=>({...p,hour:e.target.value,assigneeSchedules:p.assigneeSchedules.map(s=>({...s,hour:e.target.value}))}));
+                    const val=e.target.value;
+                    setModalForm(p=>({...p,hour:val,assigneeSchedules:p.assigneeSchedules.map(s=>({...s,hour:val}))}));
                   }} style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer"}}>
                     {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
                   </select>
@@ -1184,12 +1147,8 @@ function AddUserSection() {
   const add=async()=>{
     if(!email.trim())return;
     const{error}=await supabase.from("allowed_users").insert({email:email.trim().toLowerCase()});
-    if(error)setMsg("Error: ese correo ya existe o hubo un problema.");
-    else{
-      setMsg(`✓ ${email} agregado`);
-      setEmail("");
-      supabase.from("allowed_users").select("*").order("created_at").then(({data})=>data&&setUsers(data));
-    }
+    if(error)setMsg("Error: ese correo ya existe.");
+    else{setMsg(`✓ ${email} agregado`);setEmail("");supabase.from("allowed_users").select("*").order("created_at").then(({data})=>data&&setUsers(data));}
     setTimeout(()=>setMsg(""),3000);
   };
 
