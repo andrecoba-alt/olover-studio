@@ -400,7 +400,7 @@ export default function App() {
 
   const quickAdd=async()=>{
     if(!quick.trim())return;
-    await supabase.from("tasks").insert({id:uid(),board_id:boardId,title:quick.trim(),status:"pendiente",color:"#E8623A",duration:1,reference_links:[],assignee_schedules:[],is_recurring:false,recurrence_days:[]});
+    await supabase.from("tasks").insert({id:uid(),board_id:boardId,title:quick.trim(),status:"pendiente",color:"#FFFFFF",duration:1,reference_links:[],assignee_schedules:[],is_recurring:false,recurrence_days:[]});
     setQuick("");
   };
 
