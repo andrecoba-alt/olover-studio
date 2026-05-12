@@ -454,7 +454,7 @@ export default function App() {
     const bMids=bMems.map(m=>m.id);const cross=aids.filter(id=>!bMids.includes(id));
     const newA=[...cross,mid];
     const newS=newA.map(m=>{if(m===mid)return{memberId:mid,date,hour};const f=(t.assignee_schedules||[]).find(s=>s.memberId===m&&s.date);return f||{memberId:m,date:t.date,hour:t.hour||HOURS[0]};});
-    await updateTask(t.id,{date,hour,memberId:mid,assignees:newA,schedules:newS});
+    await updateTask(t.id,{date,hour,memberId:mid,assignees:newA,schedules:newS,status:"asignada"});
     dragRef.current=null;
   };
 
