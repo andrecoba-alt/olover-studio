@@ -48,7 +48,7 @@ const PRESETS = [
   { name:"Rose",     navBg:"#1A0F14", sideBg:"#261520", topBg:"#ffffff", accent:"#E06B9A" },
   { name:"Sand",     navBg:"#2A2318", sideBg:"#332B1E", topBg:"#FDFAF6", accent:"#C49A3C" },
 ];
-const EMPTY = { title:"",link:"",status:"pendiente",comments:"",client_id:"",color:"#E8623A",duration:1,assignees:[],schedules:[],refs:[],is_recurring:false,rec_days:[],date:"",hour:HOURS[0],end_date:"" };
+const EMPTY = { title:"",link:"",status:"pendiente",comments:"",client_id:"",color:""#FFFFFF",duration:1,assignees:[],schedules:[],refs:[],is_recurring:false,rec_days:[],date:"",hour:HOURS[0],end_date:"" };
 
 // ─── Task Modal (outside main component to prevent re-render focus loss) ─────
 function TaskModal({ modal, form, setForm, setModal, members, boards, clients, onSave, onDelete, onDuplicate }) {
