@@ -621,7 +621,7 @@ const TBlock=({t,isAllDay})=>{
                             return(
                               <div key={di} onDragOver={e=>e.preventDefault()} onDrop={e=>onDrop(e,m.id,iso,hour)} onClick={()=>ct.length===0&&openAdd(m.id,iso,hour)}
                                 style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:ct.length===0?"pointer":"default"}}>
-                                {ct.map(t=><TBlock key={t.id} t={t}/>)}
+                               {ct.map(t=><TBlock key={t.id} t={t} isAllDay={!!t.end_date}/>)}
                               </div>
                             );
                           })}
