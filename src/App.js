@@ -477,8 +477,9 @@ export default function App() {
     );
   };
 
-  const TBlock=({t})=>{
-    const cl=cOf(t.client_id);const dur=t.duration||1;
+const TBlock=({t,isAllDay})=>{
+    const cl=cOf(t.client_id);
+    const dur=isAllDay?HOURS.length:(t.duration||1);
     return(
       <div draggable onDragStart={e=>onDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
         style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#E8623A",borderRadius:6,padding:"3px 6px",cursor:"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
