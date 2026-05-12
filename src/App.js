@@ -613,11 +613,12 @@ const TBlock=({t,isAllDay})=>{
                           <div key={hour+"L"} style={{height:HOUR_H,padding:"5px 4px",fontSize:9,color:"#ccc",textAlign:"right",borderTop:"1px solid #F0EDE8",background:"#FAFAF9",display:"flex",alignItems:"flex-start",justifyContent:"flex-end"}}>{hour}</div>
                           {wDates.map((d,di)=>{
                             const iso=toISO(d);
-                            const ct=mt.filter(t=>{
-                              if(!taskOccursOn(t,iso))return false;
-                              const sch=getMSch(t,m.id);
-                              return(sch.hour||HOURS[0])===hour;
-                            });
+const ct=mt.filter(t=>{
+  if(!taskOccursOn(t,iso))return false;
+  if(t.end_date)return hour===HOURS[0]; // Tareas de día completo solo en primera hora
+  const sch=getMSch(t,m.id);
+  return(sch.hour||HOURS[0])===hour;
+});
                             return(
                               <div key={di} onDragOver={e=>e.preventDefault()} onDrop={e=>onDrop(e,m.id,iso,hour)} onClick={()=>ct.length===0&&openAdd(m.id,iso,hour)}
                                 style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:ct.length===0?"pointer":"default"}}>
