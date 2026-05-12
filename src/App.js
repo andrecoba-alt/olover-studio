@@ -280,6 +280,7 @@ export default function App() {
   const [wStarts, setWStarts]   = useState({ animadores:getMonday(today),disenadores:getMonday(today),proveedores:getMonday(today) });
   const [cYears, setCYears]     = useState({ animadores:today.getFullYear(),disenadores:today.getFullYear(),proveedores:today.getFullYear() });
   const [cMonths, setCMonths]   = useState({ animadores:today.getMonth(),disenadores:today.getMonth(),proveedores:today.getMonth() });
+  const [memFilter, setMemFilter] = useState({ animadores:"",disenadores:"",proveedores:"" });
   const logoRef = useRef();
   const dragRef = useRef(null);
 
@@ -322,11 +323,13 @@ export default function App() {
   const wStart = wStarts[boardId];
   const cYear  = cYears[boardId];
   const cMonth = cMonths[boardId];
+  const mFilter = memFilter[boardId];
   const wDates = WEEK_DAYS.map((_,i)=>addDays(wStart,i));
   const wLabel = ()=>{ const e=addDays(wStart,4); return `${wStart.getDate()} – ${e.getDate()} ${MONTHS[e.getMonth()]} ${e.getFullYear()}`; };
 
   const setView=v=>setViews(p=>({...p,[boardId]:v}));
   const setWS=fn=>setWStarts(p=>({...p,[boardId]:typeof fn==="function"?fn(p[boardId]):fn}));
+  const setMF=v=>setMemFilter(p=>({...p,[boardId]:v}));
   const prevMo=()=>{if(cMonth===0){setCMonths(p=>({...p,[boardId]:11}));setCYears(p=>({...p,[boardId]:p[boardId]-1}));}else setCMonths(p=>({...p,[boardId]:p[boardId]-1}));};
   const nextMo=()=>{if(cMonth===11){setCMonths(p=>({...p,[boardId]:0}));setCYears(p=>({...p,[boardId]:p[boardId]+1}));}else setCMonths(p=>({...p,[boardId]:p[boardId]+1}));};
 
@@ -477,7 +480,7 @@ export default function App() {
     );
   };
 
-const TBlock=({t,isAllDay})=>{
+  const TBlock=({t,isAllDay})=>{
     const cl=cOf(t.client_id);
     const dur=isAllDay?HOURS.length:(t.duration||1);
     return(
@@ -485,7 +488,7 @@ const TBlock=({t,isAllDay})=>{
         style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#E8623A",borderRadius:6,padding:"3px 6px",cursor:"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
         <p style={{fontSize:10,fontWeight:600,color:textOn(t.color||"#E8623A"),margin:0,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}{t.is_recurring?" ↻":""}{t.end_date?" ↔":""}</p>
         {cl&&<p style={{fontSize:9,color:textOn(t.color||"#E8623A"),opacity:0.8,margin:0}}>{cl.name}</p>}
-        {dur>1&&<p style={{fontSize:9,color:textOn(t.color||"#E8623A"),opacity:0.7,margin:0}}>{dur}h</p>}
+        {!isAllDay&&dur>1&&<p style={{fontSize:9,color:textOn(t.color||"#E8623A"),opacity:0.7,margin:0}}>{dur}h</p>}
       </div>
     );
   };
@@ -559,6 +562,13 @@ const TBlock=({t,isAllDay})=>{
                 <button key={v} onClick={()=>setView(v)} style={{background:view===v?"#fff":"transparent",border:"none",borderRadius:8,padding:"4px 12px",fontSize:11,fontWeight:view===v?600:400,color:view===v?"#1C1C1C":"#999",cursor:"pointer",boxShadow:view===v?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>{l}</button>
               ))}
             </div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:11,color:"#666",fontWeight:500}}>Ver:</span>
+              <select value={mFilter||""} onChange={e=>setMF(e.target.value)} style={{background:"#fff",border:"1px solid #E8E4DE",borderRadius:8,padding:"5px 10px",fontSize:11,outline:"none",cursor:"pointer",color:"#1C1C1C"}}>
+                <option value="">Todos</option>
+                {bMems.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
             {view==="weekly"?(
               <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}}>
                 <button onClick={()=>setWS(getMonday(today))} style={{...iBtnS,fontSize:11,padding:"4px 10px",border:"1px solid #E8E4DE",borderRadius:8}}>Hoy</button>
@@ -586,7 +596,7 @@ const TBlock=({t,isAllDay})=>{
 
           {view==="weekly"&&(
             <div style={{flex:1,overflowY:"auto",padding:"1rem"}}>
-              {bMems.map(m=>{
+              {bMems.filter(m=>!mFilter||m.id===mFilter).map(m=>{
                 const mt=mTasks(m.id).filter(t=>fClient?t.client_id===fClient:true);
                 const wc=mt.filter(t=>wDates.some(d=>taskOccursOn(t,toISO(d)))).length;
                 return(
@@ -613,16 +623,16 @@ const TBlock=({t,isAllDay})=>{
                           <div key={hour+"L"} style={{height:HOUR_H,padding:"5px 4px",fontSize:9,color:"#ccc",textAlign:"right",borderTop:"1px solid #F0EDE8",background:"#FAFAF9",display:"flex",alignItems:"flex-start",justifyContent:"flex-end"}}>{hour}</div>
                           {wDates.map((d,di)=>{
                             const iso=toISO(d);
-const ct=mt.filter(t=>{
-  if(!taskOccursOn(t,iso))return false;
-  if(t.end_date)return hour===HOURS[0]; // Tareas de día completo solo en primera hora
-  const sch=getMSch(t,m.id);
-  return(sch.hour||HOURS[0])===hour;
-});
+                            const ct=mt.filter(t=>{
+                              if(!taskOccursOn(t,iso))return false;
+                              if(t.end_date)return hour===HOURS[0];
+                              const sch=getMSch(t,m.id);
+                              return(sch.hour||HOURS[0])===hour;
+                            });
                             return(
                               <div key={di} onDragOver={e=>e.preventDefault()} onDrop={e=>onDrop(e,m.id,iso,hour)} onClick={()=>ct.length===0&&openAdd(m.id,iso,hour)}
                                 style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:ct.length===0?"pointer":"default"}}>
-                               {ct.map(t=><TBlock key={t.id} t={t} isAllDay={!!t.end_date}/>)}
+                                {ct.map(t=><TBlock key={t.id} t={t} isAllDay={!!t.end_date}/>)}
                               </div>
                             );
                           })}
