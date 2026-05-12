@@ -281,6 +281,7 @@ export default function App() {
   const [cYears, setCYears]     = useState({ animadores:today.getFullYear(),disenadores:today.getFullYear(),proveedores:today.getFullYear() });
   const [cMonths, setCMonths]   = useState({ animadores:today.getMonth(),disenadores:today.getMonth(),proveedores:today.getMonth() });
   const [memFilter, setMemFilter] = useState({ animadores:"",disenadores:"",proveedores:"" });
+  const [showTrash, setShowTrash] = useState(false);
   const logoRef = useRef();
   const dragRef = useRef(null);
 
@@ -333,13 +334,20 @@ export default function App() {
   const prevMo=()=>{if(cMonth===0){setCMonths(p=>({...p,[boardId]:11}));setCYears(p=>({...p,[boardId]:p[boardId]-1}));}else setCMonths(p=>({...p,[boardId]:p[boardId]-1}));};
   const nextMo=()=>{if(cMonth===11){setCMonths(p=>({...p,[boardId]:0}));setCYears(p=>({...p,[boardId]:p[boardId]+1}));}else setCMonths(p=>({...p,[boardId]:p[boardId]+1}));};
 
-  const mTasks=useCallback(mid=>{const ids=assigns.filter(a=>a.member_id===mid).map(a=>a.task_id);return tasks.filter(t=>ids.includes(t.id));},[assigns,tasks]);
-  const bTasks=useCallback(()=>{const mids=bMems.map(m=>m.id);const ids=new Set(assigns.filter(a=>mids.includes(a.member_id)).map(a=>a.task_id));return tasks.filter(t=>ids.has(t.id));},[assigns,tasks,bMems]);
+  const mTasks=useCallback(mid=>{const ids=assigns.filter(a=>a.member_id===mid).map(a=>a.task_id);return tasks.filter(t=>ids.includes(t.id)&&!t.deleted_at);},[assigns,tasks]);
+  const bTasks=useCallback(()=>{const mids=bMems.map(m=>m.id);const ids=new Set(assigns.filter(a=>mids.includes(a.member_id)).map(a=>a.task_id));return tasks.filter(t=>ids.has(t.id)&&!t.deleted_at);},[assigns,tasks,bMems]);
   const sTasks=useCallback(()=>{
     const mids=bMems.map(m=>m.id);
     const ids=new Set(assigns.filter(a=>mids.includes(a.member_id)).map(a=>a.task_id));
-    const unass=tasks.filter(t=>t.board_id===boardId&&assigns.filter(a=>a.task_id===t.id).length===0);
-    const ass=tasks.filter(t=>ids.has(t.id));
+    const unass=tasks.filter(t=>t.board_id===boardId&&assigns.filter(a=>a.task_id===t.id).length===0&&!t.deleted_at);
+    const ass=tasks.filter(t=>ids.has(t.id)&&!t.deleted_at);
+    return [...new Map([...unass,...ass].map(t=>[t.id,t])).values()];
+  },[assigns,tasks,bMems,boardId]);
+  const trashTasks=useCallback(()=>{
+    const mids=bMems.map(m=>m.id);
+    const ids=new Set(assigns.filter(a=>mids.includes(a.member_id)).map(a=>a.task_id));
+    const unass=tasks.filter(t=>t.board_id===boardId&&assigns.filter(a=>a.task_id===t.id).length===0&&t.deleted_at);
+    const ass=tasks.filter(t=>ids.has(t.id)&&t.deleted_at);
     return [...new Map([...unass,...ass].map(t=>[t.id,t])).values()];
   },[assigns,tasks,bMems,boardId]);
   const tAss=useCallback(tid=>{const ids=assigns.filter(a=>a.task_id===tid).map(a=>a.member_id);return members.filter(m=>ids.includes(m.id));},[assigns,members]);
@@ -378,7 +386,9 @@ export default function App() {
     if(assignees!==undefined){await supabase.from("task_assignments").delete().eq("task_id",id);if(assignees.length>0)await supabase.from("task_assignments").insert(assignees.map(m=>({id:uid(),task_id:id,member_id:m})));}
   };
 
-  const delTask=async id=>{await supabase.from("task_assignments").delete().eq("task_id",id);await supabase.from("tasks").delete().eq("id",id);};
+  const delTask=async id=>{await supabase.from("tasks").update({deleted_at:new Date().toISOString()}).eq("id",id);};
+  const restoreTask=async id=>{await supabase.from("tasks").update({deleted_at:null}).eq("id",id);};
+  const permDelTask=async id=>{await supabase.from("task_assignments").delete().eq("task_id",id);await supabase.from("tasks").delete().eq("id",id);};
   const dupTask=async task=>{const aids=assigns.filter(a=>a.task_id===task.id).map(a=>a.member_id);const{id:_,created_at,...rest}=task;const id=uid();await supabase.from("tasks").insert({...rest,id,title:`${task.title} (copia)`});if(aids.length>0)await supabase.from("task_assignments").insert(aids.map(m=>({id:uid(),task_id:id,member_id:m})));setModal(null);};
   const addMember=async bid=>{const bm=members.filter(m=>m.board_id===bid);const colors=["#E8623A","#3A6FE8","#7B6BE0","#3A9E8A","#C49A3C","#E06B9A"];const b=boards.find(x=>x.id===bid);await supabase.from("members").insert({id:uid(),board_id:bid,name:`${b?.label||""} ${bm.length+1}`,color:colors[bm.length%colors.length],position:bm.length});};
   const updMember=async(id,p)=>supabase.from("members").update(p).eq("id",id);
@@ -434,6 +444,44 @@ export default function App() {
   );
 
   const SideTasks=()=>{
+    if(showTrash){
+      const trash=trashTasks();
+      const getDaysLeft=t=>{
+        if(!t.deleted_at)return 30;
+        const del=new Date(t.deleted_at);
+        const now=new Date();
+        const diff=30-Math.floor((now-del)/(1000*60*60*24));
+        return Math.max(0,diff);
+      };
+      return(
+        <div style={{flex:1,overflowY:"auto",padding:"0.5rem"}}>
+          <div style={{padding:"8px 10px",background:"#2a2a2a",borderRadius:8,marginBottom:8}}>
+            <p style={{fontSize:9,color:"#888",margin:"0 0 4px",textTransform:"uppercase",letterSpacing:1}}>Papelera</p>
+            <p style={{fontSize:10,color:"#666",margin:0,lineHeight:1.4}}>Las tareas se eliminan automáticamente después de 30 días</p>
+          </div>
+          {trash.length===0&&<p style={{fontSize:11,color:"#333",textAlign:"center",marginTop:"1.5rem"}}>La papelera está vacía</p>}
+          {trash.map(t=>{
+            const ass=tAss(t.id);
+            const daysLeft=getDaysLeft(t);
+            const cl=cOf(t.client_id);
+            return(
+              <div key={t.id} style={{padding:"10px 8px",margin:"4px 0",background:"#252525",borderLeft:`3px solid ${t.color||"#444"}`,borderRadius:"0 6px 6px 0"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                  <p style={{fontSize:11,color:"#ddd",margin:0,flex:1,lineHeight:1.3}}>{t.title}</p>
+                  <span style={{fontSize:9,color:daysLeft<7?"#E8623A":"#888",background:daysLeft<7?"#E8623A22":"#2a2a2a",padding:"2px 6px",borderRadius:10}}>{daysLeft}d</span>
+                </div>
+                {cl&&<p style={{fontSize:9,color:"#888",margin:"0 0 6px"}}>{cl.name}</p>}
+                {ass.length>0&&<div style={{display:"flex",gap:2,marginBottom:6,flexWrap:"wrap"}}>{ass.map(m=><span key={m.id} style={{fontSize:9,background:m.color+"33",color:m.color,borderRadius:10,padding:"1px 5px"}}>{m.name}</span>)}</div>}
+                <div style={{display:"flex",gap:4}}>
+                  <button onClick={()=>restoreTask(t.id)} style={{flex:1,background:brand.accent,border:"none",borderRadius:6,padding:"5px 8px",fontSize:10,color:textOn(brand.accent),cursor:"pointer",fontWeight:600}}>↺ Restaurar</button>
+                  <button onClick={()=>{if(window.confirm("¿Eliminar permanentemente? No se puede deshacer."))permDelTask(t.id);}} style={{background:"#E8623A22",border:"1px solid #E8623A",borderRadius:6,padding:"5px 8px",fontSize:10,color:"#E8623A",cursor:"pointer"}}>✕</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
     const all=sTasks();const fil=fClient?all.filter(t=>t.client_id===fClient):all;
     return(
       <div style={{flex:1,overflowY:"auto",padding:"0.5rem"}}>
@@ -537,11 +585,20 @@ export default function App() {
           </div>
           <SideTasks/>
           <div style={{padding:"0.5rem 1rem",borderTop:"1px solid #2a2a2a",display:"flex",flexDirection:"column",gap:6}}>
-            <div style={{display:"flex",gap:6}}>
-              <input value={quick} onChange={e=>setQuick(e.target.value)} onKeyDown={e=>e.key==="Enter"&&quickAdd()} placeholder="Tarea rápida..." style={{flex:1,background:"#2a2a2a",border:"none",borderRadius:8,color:"#F4F2EE",fontSize:11,padding:"6px 8px",outline:"none"}}/>
-              <button onClick={quickAdd} style={{background:brand.accent,border:"none",borderRadius:8,color:textOn(brand.accent),fontSize:16,cursor:"pointer",width:28,fontWeight:700}}>+</button>
-            </div>
-            <button onClick={()=>openAdd(null,"","")} style={{width:"100%",background:"transparent",border:`1px solid ${brand.accent}55`,borderRadius:8,color:brand.accent,fontSize:11,cursor:"pointer",padding:"6px",fontWeight:500}}>+ Nueva tarea completa</button>
+            <button onClick={()=>setShowTrash(t=>!t)} style={{width:"100%",background:showTrash?"#E8623A22":"transparent",border:`1px solid ${showTrash?"#E8623A":brand.accent+"55"}`,borderRadius:8,color:showTrash?"#E8623A":brand.accent,fontSize:11,cursor:"pointer",padding:"6px",fontWeight:500,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+              <span style={{fontSize:14}}>🗑</span>
+              {showTrash?"Ver tareas":"Papelera"}
+              {!showTrash&&trashTasks().length>0&&<span style={{background:brand.accent,color:textOn(brand.accent),borderRadius:10,padding:"1px 6px",fontSize:9,fontWeight:700}}>{trashTasks().length}</span>}
+            </button>
+            {!showTrash&&(
+              <>
+                <div style={{display:"flex",gap:6}}>
+                  <input value={quick} onChange={e=>setQuick(e.target.value)} onKeyDown={e=>e.key==="Enter"&&quickAdd()} placeholder="Tarea rápida..." style={{flex:1,background:"#2a2a2a",border:"none",borderRadius:8,color:"#F4F2EE",fontSize:11,padding:"6px 8px",outline:"none"}}/>
+                  <button onClick={quickAdd} style={{background:brand.accent,border:"none",borderRadius:8,color:textOn(brand.accent),fontSize:16,cursor:"pointer",width:28,fontWeight:700}}>+</button>
+                </div>
+                <button onClick={()=>openAdd(null,"","")} style={{width:"100%",background:"transparent",border:`1px solid ${brand.accent}55`,borderRadius:8,color:brand.accent,fontSize:11,cursor:"pointer",padding:"6px",fontWeight:500}}>+ Nueva tarea completa</button>
+              </>
+            )}
           </div>
         </div>
       )}
