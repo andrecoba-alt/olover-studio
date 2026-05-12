@@ -282,6 +282,7 @@ export default function App() {
   const [cMonths, setCMonths]   = useState({ animadores:today.getMonth(),disenadores:today.getMonth(),proveedores:today.getMonth() });
   const [memFilter, setMemFilter] = useState({ animadores:"",disenadores:"",proveedores:"" });
   const [showTrash, setShowTrash] = useState(false);
+  const [resizing, setResizing] = useState(null);
   const logoRef = useRef();
   const dragRef = useRef(null);
 
@@ -289,6 +290,32 @@ export default function App() {
     const load=async(y)=>{ try{ const r=await window.fetch(`https://date.nager.at/api/v3/PublicHolidays/${y}/CO`); const d=await r.json(); const m={}; d.forEach(h=>{m[h.date]=h.localName||h.name;}); setHols(p=>({...p,[y]:m})); }catch{} };
     load(today.getFullYear()); load(today.getFullYear()+1);
   },[]);
+
+  useEffect(()=>{
+    const handleMouseMove=(e)=>{
+      if(!resizing)return;
+      const delta=e.clientY-resizing.startY;
+      const hoursDelta=Math.round(delta/HOUR_H);
+      const newDur=Math.max(1,Math.min(8,resizing.startDur+hoursDelta));
+      const task=tasks.find(t=>t.id===resizing.taskId);
+      if(task&&task.duration!==newDur){
+        updateTask(resizing.taskId,{duration:newDur});
+      }
+    };
+
+    const handleMouseUp=()=>{
+      setResizing(null);
+    };
+
+    if(resizing){
+      document.addEventListener("mousemove",handleMouseMove);
+      document.addEventListener("mouseup",handleMouseUp);
+      return()=>{
+        document.removeEventListener("mousemove",handleMouseMove);
+        document.removeEventListener("mouseup",handleMouseUp);
+      };
+    }
+  },[resizing,tasks]);
 
   const isHol = d => holidays[d.getFullYear()]?.[toISO(d)]||null;
 
@@ -508,7 +535,7 @@ export default function App() {
                     {isOC&&cT.map(t=>{
                       const ass=tAss(t.id);
                       return(
-                        <div key={t.id} onDoubleClick={()=>openEdit(t)} style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 6px",margin:"2px 0",background:"#252525",borderLeft:`3px solid ${t.color||"#444"}`,borderRadius:"0 6px 6px 0",cursor:"pointer"}}>
+                        <div key={t.id} draggable onDragStart={e=>onDragStart(e,t)} onDoubleClick={()=>openEdit(t)} style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 6px",margin:"2px 0",background:"#252525",borderLeft:`3px solid ${t.color||"#444"}`,borderRadius:"0 6px 6px 0",cursor:"grab"}}>
                           <div style={{flex:1,minWidth:0}}>
                             <p style={{fontSize:11,color:t.status==="terminada"?"#555":"#ddd",margin:0,lineHeight:1.3,textDecoration:t.status==="terminada"?"line-through":"none",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title}</p>
                             {ass.length>0&&<div style={{display:"flex",gap:2,marginTop:3,flexWrap:"wrap"}}>{ass.map(m=><span key={m.id} style={{fontSize:9,background:m.color+"33",color:m.color,borderRadius:10,padding:"1px 5px"}}>{m.name}</span>)}</div>}
@@ -531,12 +558,25 @@ export default function App() {
   const TBlock=({t,isAllDay})=>{
     const cl=cOf(t.client_id);
     const dur=isAllDay?HOURS.length:(t.duration||1);
+    
+    const handleResizeStart=(e)=>{
+      if(isAllDay)return;
+      e.stopPropagation();
+      setResizing({taskId:t.id,startY:e.clientY,startDur:dur});
+    };
+
     return(
       <div draggable onDragStart={e=>onDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
         style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#E8623A",borderRadius:6,padding:"3px 6px",cursor:"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
         <p style={{fontSize:10,fontWeight:600,color:textOn(t.color||"#E8623A"),margin:0,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}{t.is_recurring?" ↻":""}{t.end_date?" ↔":""}</p>
         {cl&&<p style={{fontSize:9,color:textOn(t.color||"#E8623A"),opacity:0.8,margin:0}}>{cl.name}</p>}
         {!isAllDay&&dur>1&&<p style={{fontSize:9,color:textOn(t.color||"#E8623A"),opacity:0.7,margin:0}}>{dur}h</p>}
+        {!isAllDay&&(
+          <div 
+            onMouseDown={handleResizeStart}
+            style={{position:"absolute",bottom:0,left:0,right:0,height:8,cursor:"ns-resize",background:"transparent",zIndex:10}}
+          />
+        )}
       </div>
     );
   };
