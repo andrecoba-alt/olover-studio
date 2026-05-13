@@ -508,7 +508,10 @@ export default function App() {
   },[assigns,tasks,bMems,boardId]);
   const tAss=useCallback(tid=>{const ids=assigns.filter(a=>a.task_id===tid).map(a=>a.member_id);return members.filter(m=>ids.includes(m.id));},[assigns,members]);
 
-  const getMSch=(task,mid)=>{const s=(task.assignee_schedules||[]).find(s=>s.memberId===mid&&s.date);return s||{date:task.date,hour:task.hour||HOURS[0]};};
+  const getMSch=(task,mid)=>{
+    const s=(task.assignee_schedules||[]).find(s=>s.memberId===mid&&s.date);
+    return s||{date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""};
+  };
   const cOf=id=>clients.find(c=>c.id===id);
 
   const addTask=async(f,mid,date,hour)=>{
@@ -909,31 +912,43 @@ export default function App() {
                               // Tareas tipo Rango con horarios individuales
                               if(t.end_date){
                                 const sch=getMSch(t,m.id);
-                                if(sch.endDate && sch.endHour){
-                                  const startDate=sch.date||t.date;
+                                
+                                // Verificar si este miembro tiene horario individual configurado
+                                if(sch && sch.date && sch.endDate && sch.endHour){
+                                  const startDate=sch.date;
                                   const endDate=sch.endDate;
                                   const startHour=sch.hour||HOURS[0];
                                   const endHour=sch.endHour;
                                   
-                                  // Verificar si esta fecha está en el rango
+                                  // Verificar si esta fecha está en el rango de este miembro
                                   if(iso<startDate || iso>endDate)return;
                                   
-                                  // Determinar horas efectivas para este día
+                                  // Calcular horas para este día específico
                                   let dayStartHour=HOURS[0];
-                                  let dayEndHour=endHour;
+                                  let dayEndHour=HOURS[HOURS.length-1];
                                   
-                                  if(iso===startDate)dayStartHour=startHour;
-                                  if(iso!==endDate)dayEndHour=HOURS[HOURS.length-1];
+                                  // Primer día: empieza a la hora especificada
+                                  if(iso===startDate){
+                                    dayStartHour=startHour;
+                                  }
+                                  
+                                  // Último día: termina a la hora especificada
+                                  if(iso===endDate){
+                                    dayEndHour=endHour;
+                                  }
                                   
                                   const startIdx=HOURS.indexOf(dayStartHour);
                                   const endIdx=HOURS.indexOf(dayEndHour);
                                   
-                                  // Mostrar en la hora de inicio
+                                  if(startIdx===-1 || endIdx===-1)return;
+                                  
+                                  // Mostrar en la hora de inicio del día
                                   if(hour===dayStartHour){
-                                    tasksToRender.push({task:t,duration:endIdx-startIdx+1});
+                                    const duration=endIdx-startIdx+1;
+                                    tasksToRender.push({task:t,duration:duration>0?duration:1});
                                   }
                                 }else{
-                                  // Sin horario individual, mostrar todo el día
+                                  // Sin horario individual para este miembro, mostrar todo el día
                                   if(hour===HOURS[0]){
                                     tasksToRender.push({task:t,duration:HOURS.length});
                                   }
