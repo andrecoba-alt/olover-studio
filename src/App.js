@@ -614,13 +614,13 @@ export default function App() {
     );
   };
 
-  const TBlock=({t,isAllDay})=>{
+  const TBlock=({t,isAllDay,blockDuration})=>{
     const cl=cOf(t.client_id);
     const isResizing=resizing&&resizing.taskId===t.id;
-    const dur=isAllDay?HOURS.length:(isResizing?resizing.currentDur:(t.duration||1));
+    const dur=blockDuration||(isAllDay?HOURS.length:(isResizing?resizing.currentDur:(t.duration||1)));
     
     const handleResizeStart=(e)=>{
-      if(isAllDay)return;
+      if(isAllDay||t.end_date)return;
       e.stopPropagation();
       setResizing({taskId:t.id,startY:e.clientY,startDur:t.duration||1,currentDur:t.duration||1});
     };
@@ -630,8 +630,8 @@ export default function App() {
         style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#FFFFFF",borderRadius:6,padding:"3px 6px",cursor:isResizing?"ns-resize":"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)",border:"1px solid #ddd"}}>
         <p style={{fontSize:10,fontWeight:600,color:textOn(t.color||"#FFFFFF"),margin:0,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}{t.is_recurring?" ↻":""}{t.end_date?" ↔":""}</p>
         {cl&&<p style={{fontSize:9,color:textOn(t.color||"#FFFFFF"),opacity:0.8,margin:0}}>{cl.name}</p>}
-        {!isAllDay&&dur>1&&<p style={{fontSize:9,color:textOn(t.color||"#FFFFFF"),opacity:0.7,margin:0}}>{dur}h</p>}
-        {!isAllDay&&(
+        {!isAllDay&&!t.end_date&&dur>1&&<p style={{fontSize:9,color:textOn(t.color||"#FFFFFF"),opacity:0.7,margin:0}}>{dur}h</p>}
+        {!isAllDay&&!t.end_date&&(
           <div 
             onMouseDown={handleResizeStart}
             style={{position:"absolute",bottom:0,left:0,right:0,height:10,cursor:"ns-resize",background:"transparent",zIndex:10}}
@@ -781,6 +781,8 @@ export default function App() {
                           {wDates.map((d,di)=>{
                             const iso=toISO(d);
                             const isLunchHour=m.lunch_start&&m.lunch_end&&hour>=m.lunch_start&&hour<m.lunch_end;
+                            
+                            // Filtrar tareas que deben mostrarse en esta celda
                             const ct=mt.filter(t=>{
                               if(!taskOccursOn(t,iso))return false;
                               
@@ -792,18 +794,23 @@ export default function App() {
                                   const startDate=sch.date||t.date;
                                   const endDate=sch.endDate;
                                   const startHour=sch.hour||HOURS[0];
-                                  const endHour=sch.endHour;
                                   
                                   // Verificar si la fecha actual está en el rango
                                   if(iso<startDate || iso>endDate)return false;
                                   
-                                  // Si es el primer día, solo desde la hora de inicio
-                                  if(iso===startDate && hour<startHour)return false;
+                                  // Determinar la hora de inicio efectiva para este día
+                                  let effectiveStartHour=HOURS[0];
+                                  if(iso===startDate){
+                                    effectiveStartHour=startHour;
+                                  }
                                   
-                                  // Si es el último día, solo hasta la hora de fin
-                                  if(iso===endDate && hour>endHour)return false;
+                                  // Si esta hora está después de lunch_end, mostrar la tarea aquí si es la primera hora después del almuerzo
+                                  if(m.lunch_start&&m.lunch_end&&hour>=m.lunch_end&&effectiveStartHour<m.lunch_start){
+                                    return hour===m.lunch_end;
+                                  }
                                   
-                                  return true;
+                                  // Mostrar en la hora de inicio efectiva si está antes o después del almuerzo
+                                  return hour===effectiveStartHour;
                                 }
                                 // Si no tiene horario individual, mostrar solo en la primera hora del primer día
                                 return hour===HOURS[0];
@@ -813,11 +820,58 @@ export default function App() {
                               const sch=getMSch(t,m.id);
                               return(sch.hour||HOURS[0])===hour;
                             });
+                            
                             return(
                               <div key={di} onDragOver={e=>!isLunchHour&&e.preventDefault()} onDrop={e=>!isLunchHour&&onDrop(e,m.id,iso,hour)} onClick={()=>!isLunchHour&&ct.length===0&&openAdd(m.id,iso,hour)}
                                 style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:isLunchHour?"not-allowed":(ct.length===0?"pointer":"default"),background:isLunchHour?"repeating-linear-gradient(45deg,#f9f9f9,#f9f9f9 10px,#f0f0f0 10px,#f0f0f0 20px)":"transparent"}}>
                                 {isLunchHour&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,opacity:0.3}}>🍽</div>}
-                                {!isLunchHour&&ct.map(t=><TBlock key={t.id} t={t} isAllDay={!!t.end_date}/>)}
+                                {!isLunchHour&&ct.map(t=>{
+                                  // Calcular cuántas horas debe ocupar visualmente este bloque
+                                  let blockDuration=1;
+                                  if(t.end_date){
+                                    const sch=getMSch(t,m.id);
+                                    if(sch.endDate&&sch.endHour){
+                                      const startDate=sch.date||t.date;
+                                      const endDate=sch.endDate;
+                                      const startHour=sch.hour||HOURS[0];
+                                      const endHour=sch.endHour;
+                                      
+                                      // Determinar horas efectivas para este día
+                                      let dayStartHour=HOURS[0];
+                                      let dayEndHour=HOURS[HOURS.length-1];
+                                      
+                                      if(iso===startDate)dayStartHour=startHour;
+                                      if(iso===endDate)dayEndHour=endHour;
+                                      
+                                      const startIdx=HOURS.indexOf(dayStartHour);
+                                      const endIdx=HOURS.indexOf(dayEndHour);
+                                      
+                                      // Si hay almuerzo configurado y la tarea lo atraviesa
+                                      if(m.lunch_start&&m.lunch_end){
+                                        const lunchStartIdx=HOURS.indexOf(m.lunch_start);
+                                        const lunchEndIdx=HOURS.indexOf(m.lunch_end);
+                                        
+                                        // Bloque antes del almuerzo
+                                        if(hour<m.lunch_start&&dayStartHour<m.lunch_start){
+                                          blockDuration=Math.min(lunchStartIdx,endIdx+1)-startIdx;
+                                        }
+                                        // Bloque después del almuerzo
+                                        else if(hour>=m.lunch_end&&dayEndHour>=m.lunch_end){
+                                          blockDuration=endIdx-lunchEndIdx+1;
+                                        }
+                                      }else{
+                                        // Sin almuerzo, ocupar todo el rango
+                                        blockDuration=endIdx-startIdx+1;
+                                      }
+                                    }else{
+                                      blockDuration=HOURS.length;
+                                    }
+                                  }else{
+                                    blockDuration=t.duration||1;
+                                  }
+                                  
+                                  return <TBlock key={t.id} t={t} isAllDay={false} memberId={m.id} currentDate={iso} blockDuration={blockDuration}/>;
+                                })}
                               </div>
                             );
                           })}
