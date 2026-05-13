@@ -783,7 +783,33 @@ export default function App() {
                             const isLunchHour=m.lunch_start&&m.lunch_end&&hour>=m.lunch_start&&hour<m.lunch_end;
                             const ct=mt.filter(t=>{
                               if(!taskOccursOn(t,iso))return false;
-                              if(t.end_date)return hour===HOURS[0];
+                              
+                              // Si la tarea tiene end_date (es tipo Rango)
+                              if(t.end_date){
+                                const sch=getMSch(t,m.id);
+                                // Si tiene horario individual con endDate y endHour
+                                if(sch.endDate && sch.endHour){
+                                  const startDate=sch.date||t.date;
+                                  const endDate=sch.endDate;
+                                  const startHour=sch.hour||HOURS[0];
+                                  const endHour=sch.endHour;
+                                  
+                                  // Verificar si la fecha actual está en el rango
+                                  if(iso<startDate || iso>endDate)return false;
+                                  
+                                  // Si es el primer día, solo desde la hora de inicio
+                                  if(iso===startDate && hour<startHour)return false;
+                                  
+                                  // Si es el último día, solo hasta la hora de fin
+                                  if(iso===endDate && hour>endHour)return false;
+                                  
+                                  return true;
+                                }
+                                // Si no tiene horario individual, mostrar solo en la primera hora del primer día
+                                return hour===HOURS[0];
+                              }
+                              
+                              // Tareas normales (no Rango)
                               const sch=getMSch(t,m.id);
                               return(sch.hour||HOURS[0])===hour;
                             });
