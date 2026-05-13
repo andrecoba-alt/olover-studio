@@ -857,8 +857,8 @@ export default function App() {
     };
 
     return(
-      <div draggable={!isResizing && !t.end_date} onDragStart={e=>!isResizing&&!t.end_date&&onDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
-        style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#FFFFFF",borderRadius:6,padding:"3px 6px",cursor:isResizing?"ns-resize":(t.end_date?"pointer":"grab"),overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)",border:"1px solid #ddd"}}>
+      <div draggable={!isResizing} onDragStart={e=>!isResizing&&onDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
+        style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#FFFFFF",borderRadius:6,padding:"3px 6px",cursor:isResizing?"ns-resize":"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)",border:"1px solid #ddd"}}>
         <p style={{fontSize:10,fontWeight:600,color:textOn(t.color||"#FFFFFF"),margin:0,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}{t.is_recurring?" ↻":""}{t.end_date?" ↔":""}</p>
         {cl&&<p style={{fontSize:9,color:textOn(t.color||"#FFFFFF"),opacity:0.8,margin:0}}>{cl.name}</p>}
         {!isAllDay&&!t.end_date&&dur>1&&<p style={{fontSize:9,color:textOn(t.color||"#FFFFFF"),opacity:0.7,margin:0}}>{dur}h</p>}
