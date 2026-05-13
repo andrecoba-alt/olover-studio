@@ -759,8 +759,8 @@ export default function App() {
     };
 
     return(
-      <div draggable={!isResizing} onDragStart={e=>!isResizing&&onDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
-        style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#FFFFFF",borderRadius:6,padding:"3px 6px",cursor:isResizing?"ns-resize":"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)",border:"1px solid #ddd"}}>
+      <div draggable={!isResizing && !t.end_date} onDragStart={e=>!isResizing&&!t.end_date&&onDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
+        style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#FFFFFF",borderRadius:6,padding:"3px 6px",cursor:isResizing?"ns-resize":(t.end_date?"pointer":"grab"),overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)",border:"1px solid #ddd"}}>
         <p style={{fontSize:10,fontWeight:600,color:textOn(t.color||"#FFFFFF"),margin:0,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}{t.is_recurring?" ↻":""}{t.end_date?" ↔":""}</p>
         {cl&&<p style={{fontSize:9,color:textOn(t.color||"#FFFFFF"),opacity:0.8,margin:0}}>{cl.name}</p>}
         {!isAllDay&&!t.end_date&&dur>1&&<p style={{fontSize:9,color:textOn(t.color||"#FFFFFF"),opacity:0.7,margin:0}}>{dur}h</p>}
@@ -859,9 +859,9 @@ export default function App() {
                 {bMems.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:4,marginLeft:12}}>
-              <button onClick={undo} disabled={historyIndex<0} title="Deshacer (Ctrl+Z)" style={{background:historyIndex<0?"#f5f5f5":"#fff",border:"1px solid #E8E4DE",borderRadius:8,padding:"6px 10px",fontSize:16,cursor:historyIndex<0?"not-allowed":"pointer",color:historyIndex<0?"#ccc":"#1C1C1C",opacity:historyIndex<0?0.5:1}}>↶</button>
-              <button onClick={redo} disabled={historyIndex>=history.length-1} title="Rehacer (Ctrl+Y)" style={{background:historyIndex>=history.length-1?"#f5f5f5":"#fff",border:"1px solid #E8E4DE",borderRadius:8,padding:"6px 10px",fontSize:16,cursor:historyIndex>=history.length-1?"not-allowed":"pointer",color:historyIndex>=history.length-1?"#ccc":"#1C1C1C",opacity:historyIndex>=history.length-1?0.5:1}}>↷</button>
+            <div style={{display:"flex",alignItems:"center",gap:4,marginLeft:12,opacity:0.3,pointerEvents:"none"}}>
+              <button disabled title="Próximamente" style={{background:"#f5f5f5",border:"1px solid #E8E4DE",borderRadius:8,padding:"6px 10px",fontSize:16,cursor:"not-allowed",color:"#ccc"}}>↶</button>
+              <button disabled title="Próximamente" style={{background:"#f5f5f5",border:"1px solid #E8E4DE",borderRadius:8,padding:"6px 10px",fontSize:16,cursor:"not-allowed",color:"#ccc"}}>↷</button>
             </div>
             {view==="weekly"?(
               <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}}>
