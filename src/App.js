@@ -4,6 +4,8 @@ import { supabase } from "./supabase";
 const STATUSES = [
   { value:"pendiente", label:"Pendiente", color:"#F0A500", bg:"#FFF8E7" },
   { value:"asignada",  label:"Asignada",  color:"#3A9E8A", bg:"#E8F7F5" },
+  { value:"en_progreso", label:"En progreso", color:"#2196F3", bg:"#E3F2FD" },
+  { value:"revision", label:"Revisión", color:"#FF9800", bg:"#FFF3E0" },
   { value:"terminada", label:"Terminada", color:"#7B6BE0", bg:"#F2F0FD" },
 ];
 
@@ -323,8 +325,11 @@ export default function App() {
   const [cMonths, setCMonths]   = useState({ animadores:today.getMonth(),disenadores:today.getMonth(),proveedores:today.getMonth() });
   const [memFilter, setMemFilter] = useState({ animadores:"",disenadores:"",proveedores:"" });
   const [showTrash, setShowTrash] = useState(false);
+  const [sidebarMemberFilter, setSidebarMemberFilter] = useState("");
   const [resizing, setResizing] = useState(null);
   const [editingLunch, setEditingLunch] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
   const logoRef = useRef();
   const dragRef = useRef(null);
 
@@ -568,9 +573,28 @@ export default function App() {
         </div>
       );
     }
-    const all=sTasks();const fil=fClient?all.filter(t=>t.client_id===fClient):all;
+    const all=sTasks();
+    let fil=fClient?all.filter(t=>t.client_id===fClient):all;
+    
+    // Filtrar por persona si hay un filtro activo
+    if(sidebarMemberFilter){
+      fil=fil.filter(t=>{
+        const ass=assigns.filter(a=>a.task_id===t.id).map(a=>a.member_id);
+        return ass.includes(sidebarMemberFilter);
+      });
+    }
+    
     return(
       <div style={{flex:1,overflowY:"auto",padding:"0.5rem"}}>
+        {/* Filtro por persona */}
+        <div style={{marginBottom:12,padding:"8px 10px",background:"#2a2a2a",borderRadius:8}}>
+          <label style={{fontSize:9,color:"#888",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>Filtrar por persona</label>
+          <select value={sidebarMemberFilter} onChange={e=>setSidebarMemberFilter(e.target.value)} style={{width:"100%",background:"#1a1a1a",border:"1px solid #333",borderRadius:6,padding:"6px 8px",fontSize:11,color:"#ddd",outline:"none",cursor:"pointer"}}>
+            <option value="">Todas las personas</option>
+            {bMems.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </div>
+        
         {STATUSES.map(st=>{
           const stT=fil.filter(t=>t.status===st.value);const isO=openG[st.value];
           const byC={};stT.forEach(t=>{const k=t.client_id||"_";if(!byC[k])byC[k]=[];byC[k].push(t);});
@@ -833,7 +857,25 @@ export default function App() {
                             return(
                               <div key={di} onDragOver={e=>!isLunchHour&&e.preventDefault()} onDrop={e=>!isLunchHour&&onDrop(e,m.id,iso,hour)} onClick={()=>!isLunchHour&&tasksToRender.length===0&&openAdd(m.id,iso,hour)}
                                 style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:isLunchHour?"not-allowed":(tasksToRender.length===0?"pointer":"default"),background:"transparent"}}>
-                                {tasksToRender.map((item,idx)=><TBlock key={item.task.id+"-"+idx} t={item.task} isAllDay={false} blockDuration={item.duration}/>)}
+                                {tasksToRender.map((item,idx)=>{
+                                  // Calcular duración visual sumando horas de almuerzo si la tarea las atraviesa
+                                  let visualDuration=item.duration;
+                                  if(m.lunch_start&&m.lunch_end&&!item.task.end_date){
+                                    const taskStartHour=hour;
+                                    const taskStartIdx=HOURS.indexOf(taskStartHour);
+                                    const taskEndIdx=taskStartIdx+item.duration-1;
+                                    const lunchStartIdx=HOURS.indexOf(m.lunch_start);
+                                    const lunchEndIdx=HOURS.indexOf(m.lunch_end);
+                                    
+                                    // Si la tarea atraviesa las horas de almuerzo, sumar esas horas a la duración visual
+                                    if(taskStartIdx<lunchEndIdx&&taskEndIdx>=lunchStartIdx){
+                                      const lunchHours=lunchEndIdx-lunchStartIdx;
+                                      visualDuration=item.duration+lunchHours;
+                                    }
+                                  }
+                                  
+                                  return <TBlock key={item.task.id+"-"+idx} t={item.task} isAllDay={false} blockDuration={visualDuration} member={m}/>;
+                                })}
                                 {isLunchHour&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,opacity:0.6,zIndex:100,background:"repeating-linear-gradient(45deg,#f9f9f9,#f9f9f9 10px,#f0f0f0 10px,#f0f0f0 20px)",pointerEvents:"none"}}>🍽</div>}
                               </div>
                             );
