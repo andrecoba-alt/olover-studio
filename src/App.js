@@ -2,10 +2,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabase";
 
 const STATUSES = [
-  { value:"pendiente", label:"Pendiente", color:"#F0A500", bg:"#FFF8E7" },
-  { value:"asignada",  label:"Asignada",  color:"#3A9E8A", bg:"#E8F7F5" },
-  { value:"revision", label:"Revisión", color:"#FF9800", bg:"#FFF3E0" },
-  { value:"terminada", label:"Terminada", color:"#7B6BE0", bg:"#F2F0FD" },
+  { value:"pendiente", label:"Pendiente", color:"#1565C0", bg:"#FFFFFF" },
+  { value:"asignada",  label:"Asignada",  color:"#FFFFFF", bg:"#B3D9E8" },
+  { value:"revision", label:"Revisión", color:"#FFFFFF", bg:"#6B9AC4" },
+  { value:"terminada", label:"Terminada", color:"#000000", bg:"#D4E157" },
 ];
 
 const HOURS     = ["8:00 AM","9:00 AM","10:00 AM","11:00 AM","12:00 PM","1:00 PM","2:00 PM","3:00 PM","4:00 PM","5:00 PM"];
@@ -142,26 +142,6 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
             );
           })}
         </div>
-        
-        {/* Aviso de duplicación multi-tablero */}
-        {(() => {
-          const selectedMembers = form.assignees.map(id => members.find(m => m.id === id)).filter(Boolean);
-          const boardIds = [...new Set(selectedMembers.map(m => m.board_id))];
-          if (boardIds.length > 1) {
-            return (
-              <div style={{background:"#FFF8E7",border:"1px solid #F0A500",borderRadius:8,padding:"10px 12px",marginBottom:"1.1rem"}}>
-                <div style={{display:"flex",alignItems:"start",gap:8}}>
-                  <span style={{fontSize:16}}>⚠️</span>
-                  <div style={{flex:1}}>
-                    <p style={{fontSize:11,color:"#F0A500",fontWeight:600,margin:"0 0 4px"}}>Personas de diferentes tableros</p>
-                    <p style={{fontSize:10,color:"#666",margin:0,lineHeight:1.4}}>Esta tarea se guardará solo para la primera persona. Después de guardar, podrás duplicarla para las demás personas desde el menú de la tarea.</p>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-          return null;
-        })()}
 
         {/* Horario por persona */}
         {form.schedules.length>0&&!form.is_recurring&&(
@@ -692,16 +672,7 @@ export default function App() {
   const saveModal=async()=>{
     if(!form.title.trim())return;
     
-    // Detectar si hay múltiples tableros
-    const selectedMembers = form.assignees.map(id => members.find(m => m.id === id)).filter(Boolean);
-    const boardIds = [...new Set(selectedMembers.map(m => m.board_id))];
-    const isMultiBoard = boardIds.length > 1;
-    
-    // Si es multi-tablero, solo guardar para la primera persona
-    const finalAssignees = isMultiBoard ? [form.assignees[0]] : form.assignees;
-    const finalSchedules = isMultiBoard ? [form.schedules[0]] : form.schedules;
-    
-    const scheds=finalSchedules.map(s=>({
+    const scheds=form.schedules.map(s=>({
       memberId:s.memberId,
       date:s.date||form.date||null,
       hour:s.hour||form.hour||HOURS[0],
@@ -709,14 +680,23 @@ export default function App() {
       endHour:s.endHour||null
     }));
     
-    if(modal.mode==="add"){await addTask({...form,assignees:finalAssignees,schedules:scheds},modal.mid,form.date,form.hour);}
-    else{await updateTask(modal.task.id,{title:form.title,link:form.link,status:form.status,comments:form.comments,client_id:form.client_id,color:form.color,duration:form.duration,reference_links:form.refs,assignees:finalAssignees,schedules:scheds,date:form.is_recurring?null:(scheds[0]?.date||form.date||null),hour:scheds[0]?.hour||form.hour||HOURS[0],end_date:form.end_date||null,is_recurring:form.is_recurring,recurrence_days:form.rec_days});}
-    
-    // Si es multi-tablero, mostrar mensaje indicando que debe duplicar
-    if(isMultiBoard && modal.mode==="add"){
-      const firstMember = selectedMembers[0];
-      const otherMembers = selectedMembers.slice(1).map(m => m.name).join(", ");
-      alert(`✅ Tarea creada para ${firstMember.name}.\n\nPara asignar a ${otherMembers}, abre la tarea y usa el botón "Duplicar".`);
+    if(modal.mode==="add"){
+      // Si hay múltiples assignees, crear una tarea por cada persona
+      if(form.assignees.length > 1){
+        for(const assigneeId of form.assignees){
+          const assigneeSchedule = scheds.find(s => s.memberId === assigneeId) || scheds[0];
+          await addTask({
+            ...form,
+            assignees:[assigneeId],
+            schedules:[assigneeSchedule]
+          }, assigneeId, form.date, form.hour);
+        }
+      } else {
+        await addTask({...form,schedules:scheds},modal.mid,form.date,form.hour);
+      }
+    }
+    else{
+      await updateTask(modal.task.id,{title:form.title,link:form.link,status:form.status,comments:form.comments,client_id:form.client_id,color:form.color,duration:form.duration,reference_links:form.refs,assignees:form.assignees,schedules:scheds,date:form.is_recurring?null:(scheds[0]?.date||form.date||null),hour:scheds[0]?.hour||form.hour||HOURS[0],end_date:form.end_date||null,is_recurring:form.is_recurring,recurrence_days:form.rec_days});
     }
     
     setModal(null);
@@ -815,7 +795,20 @@ export default function App() {
           const byC={};stT.forEach(t=>{const k=t.client_id||"_";if(!byC[k])byC[k]=[];byC[k].push(t);});
           return(
             <div key={st.value} style={{marginBottom:6}}>
-              <button onClick={()=>setOpenG(p=>({...p,[st.value]:!p[st.value]}))} style={{display:"flex",alignItems:"center",gap:8,background:st.bg,border:`1px solid ${st.color}33`,cursor:"pointer",width:"100%",padding:"8px 10px",borderRadius:8,transition:"all 0.2s"}}>
+              <button 
+                onClick={()=>setOpenG(p=>({...p,[st.value]:!p[st.value]}))} 
+                onDragOver={(e)=>{e.preventDefault();e.currentTarget.style.opacity="0.7";}}
+                onDragLeave={(e)=>{e.currentTarget.style.opacity="1";}}
+                onDrop={async(e)=>{
+                  e.preventDefault();
+                  e.currentTarget.style.opacity="1";
+                  const task=dragRef.current;
+                  if(!task)return;
+                  // Reiniciar fecha/hora y cambiar estado
+                  await updateTask(task.id,{status:st.value,date:null,hour:null,end_date:null});
+                  dragRef.current=null;
+                }}
+                style={{display:"flex",alignItems:"center",gap:8,background:st.bg,border:`1px solid ${st.color}33`,cursor:"pointer",width:"100%",padding:"8px 10px",borderRadius:8,transition:"all 0.2s"}}>
                 <span style={{fontSize:11,fontWeight:700,color:st.color,textTransform:"uppercase",letterSpacing:1,flex:1,textAlign:"left"}}>{st.label}</span>
                 <span style={{fontSize:11,fontWeight:700,color:st.color,background:"#fff",borderRadius:12,padding:"2px 8px",minWidth:28,textAlign:"center"}}>{stT.length}</span>
                 <span style={{fontSize:12,color:st.color}}>{isO?"▾":"▸"}</span>
