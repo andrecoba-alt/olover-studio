@@ -782,96 +782,90 @@ export default function App() {
                             const iso=toISO(d);
                             const isLunchHour=m.lunch_start&&m.lunch_end&&hour>=m.lunch_start&&hour<m.lunch_end;
                             
-                            // Filtrar tareas que deben mostrarse en esta celda
-                            const ct=mt.filter(t=>{
-                              if(!taskOccursOn(t,iso))return false;
+                            // Filtrar y renderizar tareas
+                            const tasksToRender=[];
+                            
+                            mt.forEach(t=>{
+                              if(!taskOccursOn(t,iso))return;
                               
-                              // Si la tarea tiene end_date (es tipo Rango)
+                              // Tareas tipo Rango con horarios individuales
                               if(t.end_date){
                                 const sch=getMSch(t,m.id);
-                                // Si tiene horario individual con endDate y endHour
                                 if(sch.endDate && sch.endHour){
                                   const startDate=sch.date||t.date;
                                   const endDate=sch.endDate;
                                   const startHour=sch.hour||HOURS[0];
+                                  const endHour=sch.endHour;
                                   
-                                  // Verificar si la fecha actual está en el rango
-                                  if(iso<startDate || iso>endDate)return false;
+                                  // Verificar si esta fecha está en el rango
+                                  if(iso<startDate || iso>endDate)return;
                                   
-                                  // Determinar la hora de inicio efectiva para este día
-                                  let effectiveStartHour=HOURS[0];
-                                  if(iso===startDate){
-                                    effectiveStartHour=startHour;
+                                  // Determinar horas efectivas para este día
+                                  let dayStartHour=HOURS[0];
+                                  let dayEndHour=endHour;
+                                  
+                                  if(iso===startDate)dayStartHour=startHour;
+                                  if(iso!==endDate)dayEndHour=HOURS[HOURS.length-1];
+                                  
+                                  const startIdx=HOURS.indexOf(dayStartHour);
+                                  const endIdx=HOURS.indexOf(dayEndHour);
+                                  const hourIdx=HOURS.indexOf(hour);
+                                  
+                                  // Si hay hora de almuerzo configurada
+                                  if(m.lunch_start&&m.lunch_end){
+                                    const lunchStartIdx=HOURS.indexOf(m.lunch_start);
+                                    const lunchEndIdx=HOURS.indexOf(m.lunch_end);
+                                    
+                                    // Caso 1: Tarea completamente antes del almuerzo
+                                    if(endIdx<lunchStartIdx){
+                                      if(hour===dayStartHour){
+                                        tasksToRender.push({task:t,duration:endIdx-startIdx+1});
+                                      }
+                                    }
+                                    // Caso 2: Tarea completamente después del almuerzo
+                                    else if(startIdx>=lunchEndIdx){
+                                      if(hour===dayStartHour){
+                                        tasksToRender.push({task:t,duration:endIdx-startIdx+1});
+                                      }
+                                    }
+                                    // Caso 3: Tarea atraviesa el almuerzo - dividir en 2 bloques
+                                    else{
+                                      // Bloque antes del almuerzo
+                                      if(startIdx<lunchStartIdx && hour===dayStartHour){
+                                        tasksToRender.push({task:t,duration:lunchStartIdx-startIdx});
+                                      }
+                                      // Bloque después del almuerzo
+                                      if(endIdx>=lunchEndIdx && hour===m.lunch_end){
+                                        tasksToRender.push({task:t,duration:endIdx-lunchEndIdx+1});
+                                      }
+                                    }
+                                  }else{
+                                    // Sin almuerzo, mostrar normalmente
+                                    if(hour===dayStartHour){
+                                      tasksToRender.push({task:t,duration:endIdx-startIdx+1});
+                                    }
                                   }
-                                  
-                                  // Si esta hora está después de lunch_end, mostrar la tarea aquí si es la primera hora después del almuerzo
-                                  if(m.lunch_start&&m.lunch_end&&hour>=m.lunch_end&&effectiveStartHour<m.lunch_start){
-                                    return hour===m.lunch_end;
+                                }else{
+                                  // Sin horario individual, mostrar todo el día
+                                  if(hour===HOURS[0]){
+                                    tasksToRender.push({task:t,duration:HOURS.length});
                                   }
-                                  
-                                  // Mostrar en la hora de inicio efectiva si está antes o después del almuerzo
-                                  return hour===effectiveStartHour;
                                 }
-                                // Si no tiene horario individual, mostrar solo en la primera hora del primer día
-                                return hour===HOURS[0];
                               }
-                              
                               // Tareas normales (no Rango)
-                              const sch=getMSch(t,m.id);
-                              return(sch.hour||HOURS[0])===hour;
+                              else{
+                                const sch=getMSch(t,m.id);
+                                if((sch.hour||HOURS[0])===hour){
+                                  tasksToRender.push({task:t,duration:t.duration||1});
+                                }
+                              }
                             });
                             
                             return(
-                              <div key={di} onDragOver={e=>!isLunchHour&&e.preventDefault()} onDrop={e=>!isLunchHour&&onDrop(e,m.id,iso,hour)} onClick={()=>!isLunchHour&&ct.length===0&&openAdd(m.id,iso,hour)}
-                                style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:isLunchHour?"not-allowed":(ct.length===0?"pointer":"default"),background:isLunchHour?"repeating-linear-gradient(45deg,#f9f9f9,#f9f9f9 10px,#f0f0f0 10px,#f0f0f0 20px)":"transparent"}}>
+                              <div key={di} onDragOver={e=>!isLunchHour&&e.preventDefault()} onDrop={e=>!isLunchHour&&onDrop(e,m.id,iso,hour)} onClick={()=>!isLunchHour&&tasksToRender.length===0&&openAdd(m.id,iso,hour)}
+                                style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:isLunchHour?"not-allowed":(tasksToRender.length===0?"pointer":"default"),background:isLunchHour?"repeating-linear-gradient(45deg,#f9f9f9,#f9f9f9 10px,#f0f0f0 10px,#f0f0f0 20px)":"transparent"}}>
                                 {isLunchHour&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,opacity:0.3}}>🍽</div>}
-                                {!isLunchHour&&ct.map(t=>{
-                                  // Calcular cuántas horas debe ocupar visualmente este bloque
-                                  let blockDuration=1;
-                                  if(t.end_date){
-                                    const sch=getMSch(t,m.id);
-                                    if(sch.endDate&&sch.endHour){
-                                      const startDate=sch.date||t.date;
-                                      const endDate=sch.endDate;
-                                      const startHour=sch.hour||HOURS[0];
-                                      const endHour=sch.endHour;
-                                      
-                                      // Determinar horas efectivas para este día
-                                      let dayStartHour=HOURS[0];
-                                      let dayEndHour=HOURS[HOURS.length-1];
-                                      
-                                      if(iso===startDate)dayStartHour=startHour;
-                                      if(iso===endDate)dayEndHour=endHour;
-                                      
-                                      const startIdx=HOURS.indexOf(dayStartHour);
-                                      const endIdx=HOURS.indexOf(dayEndHour);
-                                      
-                                      // Si hay almuerzo configurado y la tarea lo atraviesa
-                                      if(m.lunch_start&&m.lunch_end){
-                                        const lunchStartIdx=HOURS.indexOf(m.lunch_start);
-                                        const lunchEndIdx=HOURS.indexOf(m.lunch_end);
-                                        
-                                        // Bloque antes del almuerzo
-                                        if(hour<m.lunch_start&&dayStartHour<m.lunch_start){
-                                          blockDuration=Math.min(lunchStartIdx,endIdx+1)-startIdx;
-                                        }
-                                        // Bloque después del almuerzo
-                                        else if(hour>=m.lunch_end&&dayEndHour>=m.lunch_end){
-                                          blockDuration=endIdx-lunchEndIdx+1;
-                                        }
-                                      }else{
-                                        // Sin almuerzo, ocupar todo el rango
-                                        blockDuration=endIdx-startIdx+1;
-                                      }
-                                    }else{
-                                      blockDuration=HOURS.length;
-                                    }
-                                  }else{
-                                    blockDuration=t.duration||1;
-                                  }
-                                  
-                                  return <TBlock key={t.id} t={t} isAllDay={false} memberId={m.id} currentDate={iso} blockDuration={blockDuration}/>;
-                                })}
+                                {!isLunchHour&&tasksToRender.map((item,idx)=><TBlock key={item.task.id+"-"+idx} t={item.task} isAllDay={false} blockDuration={item.duration}/>)}
                               </div>
                             );
                           })}
