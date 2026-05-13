@@ -478,14 +478,29 @@ export default function App() {
 
   const openEdit=task=>{
     const aids=assigns.filter(a=>a.task_id===task.id).map(a=>a.member_id);
-    const scheds=aids.map(m=>{const s=(task.assignee_schedules||[]).find(s=>s.memberId===m&&s.date);return{memberId:m,date:s?.date||task.date||"",hour:s?.hour||task.hour||HOURS[0]};});
+    const scheds=aids.map(m=>{
+      const s=(task.assignee_schedules||[]).find(s=>s.memberId===m&&s.date);
+      return{
+        memberId:m,
+        date:s?.date||task.date||"",
+        hour:s?.hour||task.hour||HOURS[0],
+        endDate:s?.endDate||"",
+        endHour:s?.endHour||""
+      };
+    });
     setModal({mode:"edit",task});
-    setForm({title:task.title,link:task.link||"",status:task.status||"pendiente",comments:task.comments||"",client_id:task.client_id||"",color:task.color||"#E8623A",duration:task.duration||1,assignees:aids,schedules:scheds,refs:task.reference_links||[],date:scheds[0]?.date||task.date||"",hour:scheds[0]?.hour||task.hour||HOURS[0],end_date:task.end_date||"",is_recurring:task.is_recurring||false,rec_days:task.recurrence_days||[]});
+    setForm({title:task.title,link:task.link||"",status:task.status||"pendiente",comments:task.comments||"",client_id:task.client_id||"",color:task.color||"#FFFFFF",duration:task.duration||1,assignees:aids,schedules:scheds,refs:task.reference_links||[],date:scheds[0]?.date||task.date||"",hour:scheds[0]?.hour||task.hour||HOURS[0],end_date:task.end_date||"",is_recurring:task.is_recurring||false,rec_days:task.recurrence_days||[]});
   };
 
   const saveModal=async()=>{
     if(!form.title.trim())return;
-    const scheds=form.schedules.map(s=>({...s,date:s.date||form.date||null,hour:s.hour||form.hour||HOURS[0]}));
+    const scheds=form.schedules.map(s=>({
+      memberId:s.memberId,
+      date:s.date||form.date||null,
+      hour:s.hour||form.hour||HOURS[0],
+      endDate:s.endDate||null,
+      endHour:s.endHour||null
+    }));
     if(modal.mode==="add"){await addTask({...form,schedules:scheds},modal.mid,form.date,form.hour);}
     else{await updateTask(modal.task.id,{title:form.title,link:form.link,status:form.status,comments:form.comments,client_id:form.client_id,color:form.color,duration:form.duration,reference_links:form.refs,assignees:form.assignees,schedules:scheds,date:form.is_recurring?null:(scheds[0]?.date||form.date||null),hour:scheds[0]?.hour||form.hour||HOURS[0],end_date:form.end_date||null,is_recurring:form.is_recurring,recurrence_days:form.rec_days});}
     setModal(null);
