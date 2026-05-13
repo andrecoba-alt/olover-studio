@@ -509,8 +509,24 @@ export default function App() {
   const tAss=useCallback(tid=>{const ids=assigns.filter(a=>a.task_id===tid).map(a=>a.member_id);return members.filter(m=>ids.includes(m.id));},[assigns,members]);
 
   const getMSch=(task,mid)=>{
-    const s=(task.assignee_schedules||[]).find(s=>s.memberId===mid&&s.date);
-    return s||{date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""};
+    if(!task.assignee_schedules || task.assignee_schedules.length===0){
+      return {date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""};
+    }
+    
+    // Buscar el schedule específico de este miembro
+    const memberSchedule=task.assignee_schedules.find(s=>s.memberId===mid);
+    
+    if(memberSchedule){
+      return {
+        date:memberSchedule.date||task.date,
+        hour:memberSchedule.hour||task.hour||HOURS[0],
+        endDate:memberSchedule.endDate||task.end_date||"",
+        endHour:memberSchedule.endHour||""
+      };
+    }
+    
+    // Si no encontró schedule específico, devolver valores por defecto
+    return {date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""};
   };
   const cOf=id=>clients.find(c=>c.id===id);
 
@@ -912,6 +928,11 @@ export default function App() {
                               // Tareas tipo Rango con horarios individuales
                               if(t.end_date){
                                 const sch=getMSch(t,m.id);
+                                
+                                // DEBUG: Ver qué está devolviendo getMSch
+                                if(t.title.includes("Solicitud") || t.title.includes("video")){
+                                  console.log("DEBUG Tarea:",t.title,"Miembro:",m.name,"Schedule:",sch);
+                                }
                                 
                                 // Verificar si este miembro tiene horario individual configurado
                                 if(sch && sch.date && sch.endDate && sch.endHour){
