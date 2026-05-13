@@ -142,6 +142,26 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
             );
           })}
         </div>
+        
+        {/* Aviso de duplicación multi-tablero */}
+        {(() => {
+          const selectedMembers = form.assignees.map(id => members.find(m => m.id === id)).filter(Boolean);
+          const boardIds = [...new Set(selectedMembers.map(m => m.board_id))];
+          if (boardIds.length > 1) {
+            return (
+              <div style={{background:"#FFF8E7",border:"1px solid #F0A500",borderRadius:8,padding:"10px 12px",marginBottom:"1.1rem"}}>
+                <div style={{display:"flex",alignItems:"start",gap:8}}>
+                  <span style={{fontSize:16}}>⚠️</span>
+                  <div style={{flex:1}}>
+                    <p style={{fontSize:11,color:"#F0A500",fontWeight:600,margin:"0 0 4px"}}>Personas de diferentes tableros</p>
+                    <p style={{fontSize:10,color:"#666",margin:0,lineHeight:1.4}}>Esta tarea se guardará solo para la primera persona. Después de guardar, podrás duplicarla para las demás personas desde el menú de la tarea.</p>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* Horario por persona */}
         {form.schedules.length>0&&!form.is_recurring&&(
@@ -307,7 +327,27 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
         <div style={{display:"flex",gap:8,justifyContent:"space-between",flexWrap:"wrap"}}>
           <div style={{display:"flex",gap:8}}>
             {isEdit&&<button onClick={onDelete} style={{background:"none",border:"1px solid #FFD0C8",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",color:"#E8623A"}}>Eliminar</button>}
-            {isEdit&&<button onClick={onDuplicate} style={{background:"none",border:"1px solid #E8E4DE",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",color:"#666"}}>Duplicar</button>}
+            {isEdit&&(
+              <div style={{position:"relative"}}>
+                <select 
+                  onChange={(e)=>{
+                    if(e.target.value){
+                      if(window.confirm(`¿Duplicar esta tarea para ${members.find(m=>m.id===e.target.value)?.name}?`)){
+                        onDuplicate(e.target.value);
+                        e.target.value="";
+                      }
+                    }
+                  }}
+                  style={{background:"none",border:"1px solid #E8E4DE",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",color:"#666",outline:"none"}}
+                >
+                  <option value="">Duplicar para...</option>
+                  {members.map(m=>{
+                    const brd=boards.find(b=>b.id===m.board_id);
+                    return <option key={m.id} value={m.id}>{m.name} ({brd?.label})</option>;
+                  })}
+                </select>
+              </div>
+            )}
           </div>
           <div style={{display:"flex",gap:8,marginLeft:"auto"}}>
             <button onClick={()=>setModal(null)} style={{background:"none",border:"1px solid #E8E4DE",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",color:"#666"}}>Cancelar</button>
@@ -593,7 +633,31 @@ export default function App() {
   };
   const restoreTask=async id=>{await supabase.from("tasks").update({deleted_at:null}).eq("id",id);};
   const permDelTask=async id=>{await supabase.from("task_assignments").delete().eq("task_id",id);await supabase.from("tasks").delete().eq("id",id);};
-  const dupTask=async task=>{const aids=assigns.filter(a=>a.task_id===task.id).map(a=>a.member_id);const{id:_,created_at,...rest}=task;const id=uid();await supabase.from("tasks").insert({...rest,id,title:`${task.title} (copia)`});if(aids.length>0)await supabase.from("task_assignments").insert(aids.map(m=>({id:uid(),task_id:id,member_id:m})));setModal(null);};
+  const dupTask=async(task,targetMemberId=null)=>{
+    const aids=assigns.filter(a=>a.task_id===task.id).map(a=>a.member_id);
+    const{id:_,created_at,...rest}=task;
+    const id=uid();
+    
+    // Si se proporciona targetMemberId, duplicar para esa persona específica
+    const newAssignees = targetMemberId ? [targetMemberId] : aids;
+    const newSchedules = targetMemberId 
+      ? [{memberId:targetMemberId,date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""}]
+      : task.assignee_schedules;
+    
+    await supabase.from("tasks").insert({
+      ...rest,
+      id,
+      title:targetMemberId ? task.title : `${task.title} (copia)`, // No agregar "(copia)" si es duplicación dirigida
+      member_id:newAssignees[0]||null,
+      assignee_schedules:newSchedules
+    });
+    
+    if(newAssignees.length>0){
+      await supabase.from("task_assignments").insert(newAssignees.map(m=>({id:uid(),task_id:id,member_id:m})));
+    }
+    
+    setModal(null);
+  };
   const addMember=async bid=>{const bm=members.filter(m=>m.board_id===bid);const colors=["#E8623A","#3A6FE8","#7B6BE0","#3A9E8A","#C49A3C","#E06B9A"];const b=boards.find(x=>x.id===bid);await supabase.from("members").insert({id:uid(),board_id:bid,name:`${b?.label||""} ${bm.length+1}`,color:colors[bm.length%colors.length],position:bm.length});};
   const updMember=async(id,p)=>supabase.from("members").update(p).eq("id",id);
   const delMember=async id=>{await supabase.from("task_assignments").delete().eq("member_id",id);await supabase.from("members").delete().eq("id",id);};
@@ -627,15 +691,34 @@ export default function App() {
 
   const saveModal=async()=>{
     if(!form.title.trim())return;
-    const scheds=form.schedules.map(s=>({
+    
+    // Detectar si hay múltiples tableros
+    const selectedMembers = form.assignees.map(id => members.find(m => m.id === id)).filter(Boolean);
+    const boardIds = [...new Set(selectedMembers.map(m => m.board_id))];
+    const isMultiBoard = boardIds.length > 1;
+    
+    // Si es multi-tablero, solo guardar para la primera persona
+    const finalAssignees = isMultiBoard ? [form.assignees[0]] : form.assignees;
+    const finalSchedules = isMultiBoard ? [form.schedules[0]] : form.schedules;
+    
+    const scheds=finalSchedules.map(s=>({
       memberId:s.memberId,
       date:s.date||form.date||null,
       hour:s.hour||form.hour||HOURS[0],
       endDate:s.endDate||null,
       endHour:s.endHour||null
     }));
-    if(modal.mode==="add"){await addTask({...form,schedules:scheds},modal.mid,form.date,form.hour);}
-    else{await updateTask(modal.task.id,{title:form.title,link:form.link,status:form.status,comments:form.comments,client_id:form.client_id,color:form.color,duration:form.duration,reference_links:form.refs,assignees:form.assignees,schedules:scheds,date:form.is_recurring?null:(scheds[0]?.date||form.date||null),hour:scheds[0]?.hour||form.hour||HOURS[0],end_date:form.end_date||null,is_recurring:form.is_recurring,recurrence_days:form.rec_days});}
+    
+    if(modal.mode==="add"){await addTask({...form,assignees:finalAssignees,schedules:scheds},modal.mid,form.date,form.hour);}
+    else{await updateTask(modal.task.id,{title:form.title,link:form.link,status:form.status,comments:form.comments,client_id:form.client_id,color:form.color,duration:form.duration,reference_links:form.refs,assignees:finalAssignees,schedules:scheds,date:form.is_recurring?null:(scheds[0]?.date||form.date||null),hour:scheds[0]?.hour||form.hour||HOURS[0],end_date:form.end_date||null,is_recurring:form.is_recurring,recurrence_days:form.rec_days});}
+    
+    // Si es multi-tablero, mostrar mensaje indicando que debe duplicar
+    if(isMultiBoard && modal.mode==="add"){
+      const firstMember = selectedMembers[0];
+      const otherMembers = selectedMembers.slice(1).map(m => m.name).join(", ");
+      alert(`✅ Tarea creada para ${firstMember.name}.\n\nPara asignar a ${otherMembers}, abre la tarea y usa el botón "Duplicar".`);
+    }
+    
     setModal(null);
   };
 
@@ -1237,7 +1320,7 @@ export default function App() {
           clients={clients}
           onSave={saveModal}
           onDelete={async()=>{await delTask(modal.task.id);setModal(null);}}
-          onDuplicate={()=>dupTask(modal.task)}
+          onDuplicate={(targetMemberId)=>dupTask(modal.task,targetMemberId)}
         />
       )}
     </div>
