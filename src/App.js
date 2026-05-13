@@ -63,7 +63,29 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
   const toggleA = mid => {
     const sel=form.assignees.includes(mid);
     const newA=sel?form.assignees.filter(id=>id!==mid):[...form.assignees,mid];
-    const newS=sel?form.schedules.filter(s=>s.memberId!==mid):[...form.schedules,{memberId:mid,date:form.date||"",hour:form.hour||HOURS[0],endDate:form.end_date||"",endHour:""}];
+    
+    // Si estamos agregando un nuevo miembro y ya hay schedules, copiar los valores del primero
+    let newSchedule;
+    if(!sel && form.schedules.length > 0){
+      const firstSchedule = form.schedules[0];
+      newSchedule = {
+        memberId:mid,
+        date:firstSchedule.date||form.date||"",
+        hour:firstSchedule.hour||form.hour||HOURS[0],
+        endDate:firstSchedule.endDate||form.end_date||"",
+        endHour:firstSchedule.endHour||""
+      };
+    } else {
+      newSchedule = {
+        memberId:mid,
+        date:form.date||"",
+        hour:form.hour||HOURS[0],
+        endDate:form.end_date||"",
+        endHour:""
+      };
+    }
+    
+    const newS=sel?form.schedules.filter(s=>s.memberId!==mid):[...form.schedules,newSchedule];
     setForm(p=>({...p,assignees:newA,schedules:newS}));
   };
   const updSch=(mid,field,val)=>setForm(p=>({...p,schedules:p.schedules.map(s=>s.memberId===mid?{...s,[field]:val}:s)}));
@@ -928,8 +950,6 @@ export default function App() {
                               // Tareas tipo Rango con horarios individuales
                               if(t.end_date){
                                 const sch=getMSch(t,m.id);
-                                
-                                console.log("TAREA RANGO:",t.title,"MIEMBRO:",m.name,"SCH:",sch);
                                 
                                 // Verificar si este miembro tiene horario individual configurado
                                 if(sch && sch.date && sch.endDate && sch.endHour){
