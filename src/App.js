@@ -514,17 +514,21 @@ export default function App() {
   const addTask=async(f,mid,date,hour)=>{
     const id=uid();
     const allA=[...new Set([...(mid?[mid]:[]),...(f.assignees||[])])];
-    const scheds=allA.map(m=>{const s=(f.schedules||[]).find(s=>s.memberId===m);return{memberId:m,date:s?.date||date||"",hour:s?.hour||hour||HOURS[0]};});
-    await supabase.from("tasks").insert({
+    const scheds=allA.map(m=>{const s=(f.schedules||[]).find(s=>s.memberId===m);return{memberId:m,date:s?.date||date||"",hour:s?.hour||hour||HOURS[0],endDate:s?.endDate||"",endHour:s?.endHour||""};});
+    const taskData={
       id,board_id:boardId,member_id:allA[0]||null,
       title:f.title||"Sin título",status:f.status||"pendiente",
       link:f.link||"",comments:f.comments||"",client_id:f.client_id||"",
-      color:f.color||"#E8623A",duration:f.duration||1,
+      color:f.color||"#FFFFFF",duration:f.duration||1,
       reference_links:f.refs||[],assignee_schedules:scheds,
       date:scheds[0]?.date||date||null,hour:scheds[0]?.hour||hour||HOURS[0],
       is_recurring:f.is_recurring||false,recurrence_days:f.rec_days||[],end_date:f.end_date||null,
-    });
+    };
+    
+    await supabase.from("tasks").insert(taskData);
     if(allA.length>0)await supabase.from("task_assignments").insert(allA.map(m=>({id:uid(),task_id:id,member_id:m})));
+    
+    saveToHistory('CREATE_TASK',{id,task:taskData});
   };
 
   const quickAdd=async()=>{
@@ -542,7 +546,10 @@ export default function App() {
     if(assignees!==undefined){await supabase.from("task_assignments").delete().eq("task_id",id);if(assignees.length>0)await supabase.from("task_assignments").insert(assignees.map(m=>({id:uid(),task_id:id,member_id:m})));}
   };
 
-  const delTask=async id=>{await supabase.from("tasks").update({deleted_at:new Date().toISOString()}).eq("id",id);};
+  const delTask=async id=>{
+    saveToHistory('DELETE_TASK',{id});
+    await supabase.from("tasks").update({deleted_at:new Date().toISOString()}).eq("id",id);
+  };
   const restoreTask=async id=>{await supabase.from("tasks").update({deleted_at:null}).eq("id",id);};
   const permDelTask=async id=>{await supabase.from("task_assignments").delete().eq("task_id",id);await supabase.from("tasks").delete().eq("id",id);};
   const dupTask=async task=>{const aids=assigns.filter(a=>a.task_id===task.id).map(a=>a.member_id);const{id:_,created_at,...rest}=task;const id=uid();await supabase.from("tasks").insert({...rest,id,title:`${task.title} (copia)`});if(aids.length>0)await supabase.from("task_assignments").insert(aids.map(m=>({id:uid(),task_id:id,member_id:m})));setModal(null);};
@@ -594,6 +601,10 @@ export default function App() {
   const onDragStart=(e,task)=>{e.stopPropagation();dragRef.current=task;};
   const onDrop=async(e,mid,date,hour)=>{
     e.preventDefault();const t=dragRef.current;if(!t)return;
+    
+    // Guardar estado anterior para Undo
+    saveToHistory('MOVE_TASK',{id:t.id,oldDate:t.date,oldHour:t.hour,newDate:date,newHour:hour});
+    
     const aids=assigns.filter(a=>a.task_id===t.id).map(a=>a.member_id);
     const bMids=bMems.map(m=>m.id);const cross=aids.filter(id=>!bMids.includes(id));
     const newA=[...cross,mid];
