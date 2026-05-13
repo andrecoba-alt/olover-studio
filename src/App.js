@@ -7,7 +7,7 @@ const STATUSES = [
   { value:"terminada", label:"Terminada", color:"#7B6BE0", bg:"#F2F0FD" },
 ];
 
-const HOURS     = ["8:00","9:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00"];
+const HOURS     = ["8:00 AM","9:00 AM","10:00 AM","11:00 AM","12:00 PM","1:00 PM","2:00 PM","3:00 PM","4:00 PM","5:00 PM"];
 const WEEK_DAYS = ["Lun","Mar","Mié","Jue","Vie"];
 const MONTHS    = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DAYS_S    = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
@@ -124,14 +124,55 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
         {form.schedules.length>0&&!form.is_recurring&&(
           <div style={{background:"#FAFAF9",border:"1px solid #E8E4DE",borderRadius:10,padding:"10px 12px",marginBottom:"1.1rem"}}>
             <p style={{fontSize:9,color:"#aaa",textTransform:"uppercase",letterSpacing:1,margin:"0 0 8px",fontWeight:500}}>Horario por persona</p>
-            {form.schedules.map(s=>{const m=mOf(s.memberId);if(!m)return null;return(
-              <div key={s.memberId} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                <div style={{width:18,height:18,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{m.name[0]}</span></div>
-                <span style={{fontSize:11,color:"#555",width:60}}>{m.name}</span>
-                <input type="date" value={s.date||""} onChange={e=>updSch(s.memberId,"date",e.target.value)} style={{flex:1,border:"none",borderBottom:"1px solid #E8E4DE",padding:"3px 0",fontSize:11,outline:"none",background:"transparent",color:"#1C1C1C"}}/>
-                <select value={s.hour||HOURS[0]} onChange={e=>updSch(s.memberId,"hour",e.target.value)} style={{border:"none",borderBottom:"1px solid #E8E4DE",padding:"3px 0",fontSize:11,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer"}}>
-                  {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
-                </select>
+            {form.schedules.map(s=>{const m=mOf(s.memberId);if(!m)return null;
+              const isRange=!!form.end_date;
+              return(
+              <div key={s.memberId} style={{marginBottom:12,padding:8,background:"#fff",borderRadius:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                  <div style={{width:18,height:18,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:8,fontWeight:700}}>{m.name[0]}</span></div>
+                  <span style={{fontSize:12,color:"#555",fontWeight:600}}>{m.name}</span>
+                </div>
+                {isRange?(
+                  <>
+                    <div style={{display:"flex",gap:8,marginBottom:6}}>
+                      <div style={{flex:1}}>
+                        <label style={{fontSize:9,color:"#999",display:"block",marginBottom:3}}>Fecha inicio</label>
+                        <input type="date" value={s.date||""} onChange={e=>updSch(s.memberId,"date",e.target.value)} style={{width:"100%",border:"1px solid #E8E4DE",padding:"4px 6px",fontSize:11,outline:"none",borderRadius:6}}/>
+                      </div>
+                      <div style={{flex:1}}>
+                        <label style={{fontSize:9,color:"#999",display:"block",marginBottom:3}}>Fecha fin</label>
+                        <input type="date" value={s.endDate||""} onChange={e=>updSch(s.memberId,"endDate",e.target.value)} style={{width:"100%",border:"1px solid #E8E4DE",padding:"4px 6px",fontSize:11,outline:"none",borderRadius:6}}/>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <div style={{flex:1}}>
+                        <label style={{fontSize:9,color:"#999",display:"block",marginBottom:3}}>Hora inicio</label>
+                        <select value={s.hour||HOURS[0]} onChange={e=>updSch(s.memberId,"hour",e.target.value)} style={{width:"100%",border:"1px solid #E8E4DE",padding:"4px 6px",fontSize:11,outline:"none",borderRadius:6,cursor:"pointer"}}>
+                          {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
+                      <div style={{flex:1}}>
+                        <label style={{fontSize:9,color:"#999",display:"block",marginBottom:3}}>Hora fin</label>
+                        <select value={s.endHour||HOURS[HOURS.length-1]} onChange={e=>updSch(s.memberId,"endHour",e.target.value)} style={{width:"100%",border:"1px solid #E8E4DE",padding:"4px 6px",fontSize:11,outline:"none",borderRadius:6,cursor:"pointer"}}>
+                          {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                ):(
+                  <div style={{display:"flex",gap:8}}>
+                    <div style={{flex:1}}>
+                      <label style={{fontSize:9,color:"#999",display:"block",marginBottom:3}}>Fecha</label>
+                      <input type="date" value={s.date||""} onChange={e=>updSch(s.memberId,"date",e.target.value)} style={{width:"100%",border:"1px solid #E8E4DE",padding:"4px 6px",fontSize:11,outline:"none",borderRadius:6}}/>
+                    </div>
+                    <div style={{flex:1}}>
+                      <label style={{fontSize:9,color:"#999",display:"block",marginBottom:3}}>Hora</label>
+                      <select value={s.hour||HOURS[0]} onChange={e=>updSch(s.memberId,"hour",e.target.value)} style={{width:"100%",border:"1px solid #E8E4DE",padding:"4px 6px",fontSize:11,outline:"none",borderRadius:6,cursor:"pointer"}}>
+                        {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
             );})}
           </div>
@@ -283,6 +324,7 @@ export default function App() {
   const [memFilter, setMemFilter] = useState({ animadores:"",disenadores:"",proveedores:"" });
   const [showTrash, setShowTrash] = useState(false);
   const [resizing, setResizing] = useState(null);
+  const [editingLunch, setEditingLunch] = useState(null);
   const logoRef = useRef();
   const dragRef = useRef(null);
 
@@ -296,14 +338,16 @@ export default function App() {
       if(!resizing)return;
       const delta=e.clientY-resizing.startY;
       const hoursDelta=Math.round(delta/HOUR_H);
-      const newDur=Math.max(1,Math.min(8,resizing.startDur+hoursDelta));
-      const task=tasks.find(t=>t.id===resizing.taskId);
-      if(task&&task.duration!==newDur){
-        updateTask(resizing.taskId,{duration:newDur});
+      const newDur=Math.max(1,Math.min(10,resizing.startDur+hoursDelta));
+      if(newDur!==resizing.currentDur){
+        setResizing(r=>({...r,currentDur:newDur}));
       }
     };
 
     const handleMouseUp=()=>{
+      if(resizing&&resizing.currentDur!==resizing.startDur){
+        updateTask(resizing.taskId,{duration:resizing.currentDur});
+      }
       setResizing(null);
     };
 
@@ -315,7 +359,7 @@ export default function App() {
         document.removeEventListener("mouseup",handleMouseUp);
       };
     }
-  },[resizing,tasks]);
+  },[resizing]);
 
   const isHol = d => holidays[d.getFullYear()]?.[toISO(d)]||null;
 
@@ -557,24 +601,25 @@ export default function App() {
 
   const TBlock=({t,isAllDay})=>{
     const cl=cOf(t.client_id);
-    const dur=isAllDay?HOURS.length:(t.duration||1);
+    const isResizing=resizing&&resizing.taskId===t.id;
+    const dur=isAllDay?HOURS.length:(isResizing?resizing.currentDur:(t.duration||1));
     
     const handleResizeStart=(e)=>{
       if(isAllDay)return;
       e.stopPropagation();
-      setResizing({taskId:t.id,startY:e.clientY,startDur:dur});
+      setResizing({taskId:t.id,startY:e.clientY,startDur:t.duration||1,currentDur:t.duration||1});
     };
 
     return(
-      <div draggable onDragStart={e=>onDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
-        style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#E8623A",borderRadius:6,padding:"3px 6px",cursor:"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)"}}>
-        <p style={{fontSize:10,fontWeight:600,color:textOn(t.color||"#E8623A"),margin:0,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}{t.is_recurring?" ↻":""}{t.end_date?" ↔":""}</p>
-        {cl&&<p style={{fontSize:9,color:textOn(t.color||"#E8623A"),opacity:0.8,margin:0}}>{cl.name}</p>}
-        {!isAllDay&&dur>1&&<p style={{fontSize:9,color:textOn(t.color||"#E8623A"),opacity:0.7,margin:0}}>{dur}h</p>}
+      <div draggable={!isResizing} onDragStart={e=>!isResizing&&onDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
+        style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#FFFFFF",borderRadius:6,padding:"3px 6px",cursor:isResizing?"ns-resize":"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)",border:"1px solid #ddd"}}>
+        <p style={{fontSize:10,fontWeight:600,color:textOn(t.color||"#FFFFFF"),margin:0,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}{t.is_recurring?" ↻":""}{t.end_date?" ↔":""}</p>
+        {cl&&<p style={{fontSize:9,color:textOn(t.color||"#FFFFFF"),opacity:0.8,margin:0}}>{cl.name}</p>}
+        {!isAllDay&&dur>1&&<p style={{fontSize:9,color:textOn(t.color||"#FFFFFF"),opacity:0.7,margin:0}}>{dur}h</p>}
         {!isAllDay&&(
           <div 
             onMouseDown={handleResizeStart}
-            style={{position:"absolute",bottom:0,left:0,right:0,height:8,cursor:"ns-resize",background:"transparent",zIndex:10}}
+            style={{position:"absolute",bottom:0,left:0,right:0,height:10,cursor:"ns-resize",background:"transparent",zIndex:10}}
           />
         )}
       </div>
@@ -720,6 +765,7 @@ export default function App() {
                           <div key={hour+"L"} style={{height:HOUR_H,padding:"5px 4px",fontSize:9,color:"#ccc",textAlign:"right",borderTop:"1px solid #F0EDE8",background:"#FAFAF9",display:"flex",alignItems:"flex-start",justifyContent:"flex-end"}}>{hour}</div>
                           {wDates.map((d,di)=>{
                             const iso=toISO(d);
+                            const isLunchHour=m.lunch_start&&m.lunch_end&&hour>=m.lunch_start&&hour<m.lunch_end;
                             const ct=mt.filter(t=>{
                               if(!taskOccursOn(t,iso))return false;
                               if(t.end_date)return hour===HOURS[0];
@@ -727,9 +773,10 @@ export default function App() {
                               return(sch.hour||HOURS[0])===hour;
                             });
                             return(
-                              <div key={di} onDragOver={e=>e.preventDefault()} onDrop={e=>onDrop(e,m.id,iso,hour)} onClick={()=>ct.length===0&&openAdd(m.id,iso,hour)}
-                                style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:ct.length===0?"pointer":"default"}}>
-                                {ct.map(t=><TBlock key={t.id} t={t} isAllDay={!!t.end_date}/>)}
+                              <div key={di} onDragOver={e=>!isLunchHour&&e.preventDefault()} onDrop={e=>!isLunchHour&&onDrop(e,m.id,iso,hour)} onClick={()=>!isLunchHour&&ct.length===0&&openAdd(m.id,iso,hour)}
+                                style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:isLunchHour?"not-allowed":(ct.length===0?"pointer":"default"),background:isLunchHour?"repeating-linear-gradient(45deg,#f9f9f9,#f9f9f9 10px,#f0f0f0 10px,#f0f0f0 20px)":"transparent"}}>
+                                {isLunchHour&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,opacity:0.3}}>🍽</div>}
+                                {!isLunchHour&&ct.map(t=><TBlock key={t.id} t={t} isAllDay={!!t.end_date}/>)}
                               </div>
                             );
                           })}
@@ -874,14 +921,28 @@ export default function App() {
                         </div>
                       </div>
                       {members.filter(m=>m.board_id===b.id).map(m=>(
-                        <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                          <div style={{width:22,height:22,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:9,fontWeight:700}}>{(m.name||"?")[0]}</span></div>
-                          <input key={m.id+m.name} defaultValue={m.name||""} onBlur={e=>updMember(m.id,{name:e.target.value})} style={{flex:1,border:"none",borderBottom:"1px solid #E8E4DE",fontSize:12,outline:"none",background:"transparent",color:"#555",padding:"2px 0"}}/>
-                          <div style={{position:"relative"}}>
-                            <div style={{width:20,height:20,borderRadius:6,background:m.color,cursor:"pointer"}} onClick={()=>document.getElementById(`pk-m-${m.id}`).click()}/>
-                            <input id={`pk-m-${m.id}`} type="color" value={m.color} onChange={e=>updMember(m.id,{color:e.target.value})} style={{position:"absolute",opacity:0,width:20,height:20,top:0,left:0}}/>
+                        <div key={m.id} style={{border:"1px solid #F0EDE8",borderRadius:10,padding:10,marginBottom:8,background:"#FAFAF9"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                            <div style={{width:22,height:22,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:9,fontWeight:700}}>{(m.name||"?")[0]}</span></div>
+                            <input key={m.id+m.name} defaultValue={m.name||""} onBlur={e=>updMember(m.id,{name:e.target.value})} style={{flex:1,border:"none",borderBottom:"1px solid #E8E4DE",fontSize:12,outline:"none",background:"transparent",color:"#555",padding:"2px 0"}}/>
+                            <div style={{position:"relative"}}>
+                              <div style={{width:20,height:20,borderRadius:6,background:m.color,cursor:"pointer"}} onClick={()=>document.getElementById(`pk-m-${m.id}`).click()}/>
+                              <input id={`pk-m-${m.id}`} type="color" value={m.color} onChange={e=>updMember(m.id,{color:e.target.value})} style={{position:"absolute",opacity:0,width:20,height:20,top:0,left:0}}/>
+                            </div>
+                            <button onClick={()=>delMember(m.id)} style={{background:"none",border:"none",color:"#ccc",fontSize:14,cursor:"pointer"}}>✕</button>
                           </div>
-                          <button onClick={()=>delMember(m.id)} style={{background:"none",border:"none",color:"#ccc",fontSize:14,cursor:"pointer"}}>✕</button>
+                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                            <span style={{fontSize:10,color:"#999",minWidth:70}}>🍽 Almuerzo:</span>
+                            <select value={m.lunch_start||""} onChange={e=>updMember(m.id,{lunch_start:e.target.value})} style={{flex:1,border:"1px solid #E8E4DE",borderRadius:6,padding:"3px 6px",fontSize:11,outline:"none",cursor:"pointer"}}>
+                              <option value="">Sin bloqueo</option>
+                              {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
+                            </select>
+                            <span style={{fontSize:10,color:"#999"}}>a</span>
+                            <select value={m.lunch_end||""} onChange={e=>updMember(m.id,{lunch_end:e.target.value})} style={{flex:1,border:"1px solid #E8E4DE",borderRadius:6,padding:"3px 6px",fontSize:11,outline:"none",cursor:"pointer"}}>
+                              <option value="">-</option>
+                              {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
+                            </select>
+                          </div>
                         </div>
                       ))}
                       <button onClick={()=>addMember(b.id)} style={{display:"flex",alignItems:"center",gap:6,background:"none",border:"1px dashed #ddd",borderRadius:8,padding:"5px 10px",fontSize:11,color:"#aaa",cursor:"pointer",width:"100%",marginTop:4}}>
