@@ -4,7 +4,6 @@ import { supabase } from "./supabase";
 const STATUSES = [
   { value:"pendiente", label:"Pendiente", color:"#F0A500", bg:"#FFF8E7" },
   { value:"asignada",  label:"Asignada",  color:"#3A9E8A", bg:"#E8F7F5" },
-  { value:"en_progreso", label:"En progreso", color:"#2196F3", bg:"#E3F2FD" },
   { value:"revision", label:"Revisión", color:"#FF9800", bg:"#FFF3E0" },
   { value:"terminada", label:"Terminada", color:"#7B6BE0", bg:"#F2F0FD" },
 ];
@@ -330,8 +329,89 @@ export default function App() {
   const [editingLunch, setEditingLunch] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [statuses, setStatuses] = useState([]);
   const logoRef = useRef();
   const dragRef = useRef(null);
+  
+  // Función para guardar estado en el historial
+  const saveToHistory = useCallback((action, data) => {
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      newHistory.push({ action, data, timestamp: Date.now() });
+      if (newHistory.length > 10) newHistory.shift();
+      return newHistory;
+    });
+    setHistoryIndex(prev => Math.min(prev + 1, 9));
+  }, [historyIndex]);
+  
+  // Función para deshacer
+  const undo = useCallback(async () => {
+    if (historyIndex < 0) return;
+    const item = history[historyIndex];
+    
+    switch(item.action) {
+      case 'CREATE_TASK':
+        await supabase.from("tasks").delete().eq("id", item.data.id);
+        break;
+      case 'UPDATE_TASK':
+        await supabase.from("tasks").update(item.data.oldValues).eq("id", item.data.id);
+        break;
+      case 'DELETE_TASK':
+        await supabase.from("tasks").update({ deleted_at: null }).eq("id", item.data.id);
+        break;
+      case 'MOVE_TASK':
+        await supabase.from("tasks").update({ 
+          date: item.data.oldDate, 
+          hour: item.data.oldHour 
+        }).eq("id", item.data.id);
+        break;
+    }
+    
+    setHistoryIndex(prev => prev - 1);
+  }, [history, historyIndex]);
+  
+  // Función para rehacer
+  const redo = useCallback(async () => {
+    if (historyIndex >= history.length - 1) return;
+    const item = history[historyIndex + 1];
+    
+    switch(item.action) {
+      case 'CREATE_TASK':
+        await supabase.from("tasks").insert(item.data.task);
+        break;
+      case 'UPDATE_TASK':
+        await supabase.from("tasks").update(item.data.newValues).eq("id", item.data.id);
+        break;
+      case 'DELETE_TASK':
+        await supabase.from("tasks").update({ deleted_at: new Date().toISOString() }).eq("id", item.data.id);
+        break;
+      case 'MOVE_TASK':
+        await supabase.from("tasks").update({ 
+          date: item.data.newDate, 
+          hour: item.data.newHour 
+        }).eq("id", item.data.id);
+        break;
+    }
+    
+    setHistoryIndex(prev => prev + 1);
+  }, [history, historyIndex]);
+  
+  // Atajos de teclado para Undo/Redo
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
 
   useEffect(()=>{
     const load=async(y)=>{ try{ const r=await window.fetch(`https://date.nager.at/api/v3/PublicHolidays/${y}/CO`); const d=await r.json(); const m={}; d.forEach(h=>{m[h.date]=h.localName||h.name;}); setHols(p=>({...p,[y]:m})); }catch{} };
@@ -600,11 +680,10 @@ export default function App() {
           const byC={};stT.forEach(t=>{const k=t.client_id||"_";if(!byC[k])byC[k]=[];byC[k].push(t);});
           return(
             <div key={st.value} style={{marginBottom:6}}>
-              <button onClick={()=>setOpenG(p=>({...p,[st.value]:!p[st.value]}))} style={{display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",width:"100%",padding:"4px 6px",borderRadius:6}}>
-                <span style={{fontSize:8,color:st.color}}>●</span>
-                <span style={{fontSize:10,fontWeight:600,color:st.color,textTransform:"uppercase",letterSpacing:1}}>{st.label}</span>
-                <span style={{fontSize:10,color:"#555",marginLeft:"auto"}}>{stT.length}</span>
-                <span style={{fontSize:10,color:"#555"}}>{isO?"▾":"▸"}</span>
+              <button onClick={()=>setOpenG(p=>({...p,[st.value]:!p[st.value]}))} style={{display:"flex",alignItems:"center",gap:8,background:st.bg,border:`1px solid ${st.color}33`,cursor:"pointer",width:"100%",padding:"8px 10px",borderRadius:8,transition:"all 0.2s"}}>
+                <span style={{fontSize:11,fontWeight:700,color:st.color,textTransform:"uppercase",letterSpacing:1,flex:1,textAlign:"left"}}>{st.label}</span>
+                <span style={{fontSize:11,fontWeight:700,color:st.color,background:"#fff",borderRadius:12,padding:"2px 8px",minWidth:28,textAlign:"center"}}>{stT.length}</span>
+                <span style={{fontSize:12,color:st.color}}>{isO?"▾":"▸"}</span>
               </button>
               {isO&&Object.entries(byC).map(([ck,cT])=>{
                 const cl=ck==="_"?null:cOf(ck);const isOC=openC[`${st.value}-${ck}`]!==false;
@@ -749,6 +828,10 @@ export default function App() {
                 <option value="">Todos</option>
                 {bMems.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:4,marginLeft:12}}>
+              <button onClick={undo} disabled={historyIndex<0} title="Deshacer (Ctrl+Z)" style={{background:historyIndex<0?"#f5f5f5":"#fff",border:"1px solid #E8E4DE",borderRadius:8,padding:"6px 10px",fontSize:16,cursor:historyIndex<0?"not-allowed":"pointer",color:historyIndex<0?"#ccc":"#1C1C1C",opacity:historyIndex<0?0.5:1}}>↶</button>
+              <button onClick={redo} disabled={historyIndex>=history.length-1} title="Rehacer (Ctrl+Y)" style={{background:historyIndex>=history.length-1?"#f5f5f5":"#fff",border:"1px solid #E8E4DE",borderRadius:8,padding:"6px 10px",fontSize:16,cursor:historyIndex>=history.length-1?"not-allowed":"pointer",color:historyIndex>=history.length-1?"#ccc":"#1C1C1C",opacity:historyIndex>=history.length-1?0.5:1}}>↷</button>
             </div>
             {view==="weekly"?(
               <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}}>
