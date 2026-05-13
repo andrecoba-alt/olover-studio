@@ -929,6 +929,8 @@ export default function App() {
                               if(t.end_date){
                                 const sch=getMSch(t,m.id);
                                 
+                                console.log("TAREA RANGO:",t.title,"MIEMBRO:",m.name,"SCH:",sch);
+                                
                                 // Verificar si este miembro tiene horario individual configurado
                                 if(sch && sch.date && sch.endDate && sch.endHour){
                                   const startDate=sch.date;
