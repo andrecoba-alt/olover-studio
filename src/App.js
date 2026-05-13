@@ -3,7 +3,7 @@ import { supabase } from "./supabase";
 
 const STATUSES = [
   { value:"pendiente", label:"Pendiente", color:"#1565C0", bg:"#FFFFFF" },
-  { value:"asignada",  label:"Asignada",  color:"#FFFFFF", bg:"#B3D9E8" },
+  { value:"asignada",  label:"Asignada",  color:"#1565C0", bg:"#B3D9E8" },
   { value:"revision", label:"Revisión", color:"#FFFFFF", bg:"#6B9AC4" },
   { value:"terminada", label:"Terminada", color:"#000000", bg:"#D4E157" },
 ];
@@ -810,7 +810,7 @@ export default function App() {
                 }}
                 style={{display:"flex",alignItems:"center",gap:8,background:st.bg,border:`1px solid ${st.color}33`,cursor:"pointer",width:"100%",padding:"8px 10px",borderRadius:8,transition:"all 0.2s"}}>
                 <span style={{fontSize:11,fontWeight:700,color:st.color,textTransform:"uppercase",letterSpacing:1,flex:1,textAlign:"left"}}>{st.label}</span>
-                <span style={{fontSize:11,fontWeight:700,color:st.color,background:"#fff",borderRadius:12,padding:"2px 8px",minWidth:28,textAlign:"center"}}>{stT.length}</span>
+                <span style={{fontSize:11,fontWeight:700,color:st.color,minWidth:28,textAlign:"center"}}>{stT.length}</span>
                 <span style={{fontSize:12,color:st.color}}>{isO?"▾":"▸"}</span>
               </button>
               {isO&&Object.entries(byC).map(([ck,cT])=>{
