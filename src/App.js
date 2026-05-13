@@ -63,7 +63,7 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
   const toggleA = mid => {
     const sel=form.assignees.includes(mid);
     const newA=sel?form.assignees.filter(id=>id!==mid):[...form.assignees,mid];
-    const newS=sel?form.schedules.filter(s=>s.memberId!==mid):[...form.schedules,{memberId:mid,date:form.date||"",hour:form.hour||HOURS[0]}];
+    const newS=sel?form.schedules.filter(s=>s.memberId!==mid):[...form.schedules,{memberId:mid,date:form.date||"",hour:form.hour||HOURS[0],endDate:form.end_date||"",endHour:""}];
     setForm(p=>({...p,assignees:newA,schedules:newS}));
   };
   const updSch=(mid,field,val)=>setForm(p=>({...p,schedules:p.schedules.map(s=>s.memberId===mid?{...s,[field]:val}:s)}));
@@ -584,18 +584,18 @@ export default function App() {
   const openAdd=(mid,date,hour)=>{
     const d=date||"";const h=hour||HOURS[0];
     setModal({mode:"add",mid,date:d,hour:h});
-    setForm({...EMPTY,assignees:mid?[mid]:[],schedules:mid?[{memberId:mid,date:d,hour:h}]:[],date:d,hour:h});
+    setForm({...EMPTY,assignees:mid?[mid]:[],schedules:mid?[{memberId:mid,date:d,hour:h,endDate:"",endHour:""}]:[],date:d,hour:h});
   };
 
   const openEdit=task=>{
     const aids=assigns.filter(a=>a.task_id===task.id).map(a=>a.member_id);
     const scheds=aids.map(m=>{
-      const s=(task.assignee_schedules||[]).find(s=>s.memberId===m&&s.date);
+      const s=(task.assignee_schedules||[]).find(s=>s.memberId===m);
       return{
         memberId:m,
         date:s?.date||task.date||"",
         hour:s?.hour||task.hour||HOURS[0],
-        endDate:s?.endDate||"",
+        endDate:s?.endDate||task.end_date||"",
         endHour:s?.endHour||""
       };
     });
@@ -928,11 +928,6 @@ export default function App() {
                               // Tareas tipo Rango con horarios individuales
                               if(t.end_date){
                                 const sch=getMSch(t,m.id);
-                                
-                                // DEBUG: Ver qué está devolviendo getMSch
-                                if(t.title.includes("Solicitud") || t.title.includes("video")){
-                                  console.log("DEBUG Tarea:",t.title,"Miembro:",m.name,"Schedule:",sch);
-                                }
                                 
                                 // Verificar si este miembro tiene horario individual configurado
                                 if(sch && sch.date && sch.endDate && sch.endHour){
