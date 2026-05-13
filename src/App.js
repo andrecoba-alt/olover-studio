@@ -782,7 +782,7 @@ export default function App() {
                             const iso=toISO(d);
                             const isLunchHour=m.lunch_start&&m.lunch_end&&hour>=m.lunch_start&&hour<m.lunch_end;
                             
-                            // Filtrar y renderizar tareas
+                            // Filtrar tareas que deben mostrarse en esta celda
                             const tasksToRender=[];
                             
                             mt.forEach(t=>{
@@ -809,41 +809,10 @@ export default function App() {
                                   
                                   const startIdx=HOURS.indexOf(dayStartHour);
                                   const endIdx=HOURS.indexOf(dayEndHour);
-                                  const hourIdx=HOURS.indexOf(hour);
                                   
-                                  // Si hay hora de almuerzo configurada
-                                  if(m.lunch_start&&m.lunch_end){
-                                    const lunchStartIdx=HOURS.indexOf(m.lunch_start);
-                                    const lunchEndIdx=HOURS.indexOf(m.lunch_end);
-                                    
-                                    // Caso 1: Tarea completamente antes del almuerzo
-                                    if(endIdx<lunchStartIdx){
-                                      if(hour===dayStartHour){
-                                        tasksToRender.push({task:t,duration:endIdx-startIdx+1});
-                                      }
-                                    }
-                                    // Caso 2: Tarea completamente después del almuerzo
-                                    else if(startIdx>=lunchEndIdx){
-                                      if(hour===dayStartHour){
-                                        tasksToRender.push({task:t,duration:endIdx-startIdx+1});
-                                      }
-                                    }
-                                    // Caso 3: Tarea atraviesa el almuerzo - dividir en 2 bloques
-                                    else{
-                                      // Bloque antes del almuerzo
-                                      if(startIdx<lunchStartIdx && hour===dayStartHour){
-                                        tasksToRender.push({task:t,duration:lunchStartIdx-startIdx});
-                                      }
-                                      // Bloque después del almuerzo
-                                      if(endIdx>=lunchEndIdx && hour===m.lunch_end){
-                                        tasksToRender.push({task:t,duration:endIdx-lunchEndIdx+1});
-                                      }
-                                    }
-                                  }else{
-                                    // Sin almuerzo, mostrar normalmente
-                                    if(hour===dayStartHour){
-                                      tasksToRender.push({task:t,duration:endIdx-startIdx+1});
-                                    }
+                                  // Mostrar en la hora de inicio
+                                  if(hour===dayStartHour){
+                                    tasksToRender.push({task:t,duration:endIdx-startIdx+1});
                                   }
                                 }else{
                                   // Sin horario individual, mostrar todo el día
@@ -863,9 +832,9 @@ export default function App() {
                             
                             return(
                               <div key={di} onDragOver={e=>!isLunchHour&&e.preventDefault()} onDrop={e=>!isLunchHour&&onDrop(e,m.id,iso,hour)} onClick={()=>!isLunchHour&&tasksToRender.length===0&&openAdd(m.id,iso,hour)}
-                                style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:isLunchHour?"not-allowed":(tasksToRender.length===0?"pointer":"default"),background:isLunchHour?"repeating-linear-gradient(45deg,#f9f9f9,#f9f9f9 10px,#f0f0f0 10px,#f0f0f0 20px)":"transparent"}}>
-                                {isLunchHour&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,opacity:0.3}}>🍽</div>}
-                                {!isLunchHour&&tasksToRender.map((item,idx)=><TBlock key={item.task.id+"-"+idx} t={item.task} isAllDay={false} blockDuration={item.duration}/>)}
+                                style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:isLunchHour?"not-allowed":(tasksToRender.length===0?"pointer":"default"),background:"transparent"}}>
+                                {tasksToRender.map((item,idx)=><TBlock key={item.task.id+"-"+idx} t={item.task} isAllDay={false} blockDuration={item.duration}/>)}
+                                {isLunchHour&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,opacity:0.6,zIndex:100,background:"repeating-linear-gradient(45deg,#f9f9f9,#f9f9f9 10px,#f0f0f0 10px,#f0f0f0 20px)",pointerEvents:"none"}}>🍽</div>}
                               </div>
                             );
                           })}
