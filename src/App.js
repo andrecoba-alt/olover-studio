@@ -64,26 +64,14 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
     const sel=form.assignees.includes(mid);
     const newA=sel?form.assignees.filter(id=>id!==mid):[...form.assignees,mid];
     
-    // Si estamos agregando un nuevo miembro y ya hay schedules, copiar los valores del primero
-    let newSchedule;
-    if(!sel && form.schedules.length > 0){
-      const firstSchedule = form.schedules[0];
-      newSchedule = {
-        memberId:mid,
-        date:firstSchedule.date||form.date||"",
-        hour:firstSchedule.hour||form.hour||HOURS[0],
-        endDate:firstSchedule.endDate||form.end_date||"",
-        endHour:firstSchedule.endHour||""
-      };
-    } else {
-      newSchedule = {
-        memberId:mid,
-        date:form.date||"",
-        hour:form.hour||HOURS[0],
-        endDate:form.end_date||"",
-        endHour:""
-      };
-    }
+    // Si estamos agregando un nuevo miembro, crear schedule con valores por defecto
+    let newSchedule = {
+      memberId:mid,
+      date:form.date||"",
+      hour:form.hour||HOURS[0],
+      endDate:"",
+      endHour:""
+    };
     
     const newS=sel?form.schedules.filter(s=>s.memberId!==mid):[...form.schedules,newSchedule];
     setForm(p=>({...p,assignees:newA,schedules:newS}));
@@ -679,6 +667,10 @@ export default function App() {
       endDate:s.endDate||null,
       endHour:s.endHour||null
     }));
+    
+    console.log("🔍 GUARDANDO SCHEDULES:", JSON.stringify(scheds, null, 2));
+    console.log("🔍 FORM END_DATE:", form.end_date);
+    console.log("🔍 FORM SCHEDULES:", JSON.stringify(form.schedules, null, 2));
     
     if(modal.mode==="add"){
       // Si hay múltiples assignees, crear una tarea por cada persona
