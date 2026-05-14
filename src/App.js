@@ -70,7 +70,7 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
       date:form.date||"",
       hour:form.hour||HOURS[0],
       endDate:"",
-      endHour:""
+      endHour:HOURS[HOURS.length-1]  // Default a última hora
     };
     
     const newS=sel?form.schedules.filter(s=>s.memberId!==mid):[...form.schedules,newSchedule];
@@ -638,7 +638,7 @@ export default function App() {
   const openAdd=(mid,date,hour)=>{
     const d=date||"";const h=hour||HOURS[0];
     setModal({mode:"add",mid,date:d,hour:h});
-    setForm({...EMPTY,assignees:mid?[mid]:[],schedules:mid?[{memberId:mid,date:d,hour:h,endDate:"",endHour:""}]:[],date:d,hour:h});
+    setForm({...EMPTY,assignees:mid?[mid]:[],schedules:mid?[{memberId:mid,date:d,hour:h,endDate:"",endHour:HOURS[HOURS.length-1]}]:[],date:d,hour:h});
   };
 
   const openEdit=task=>{
@@ -650,7 +650,7 @@ export default function App() {
         date:s?.date||task.date||"",
         hour:s?.hour||task.hour||HOURS[0],
         endDate:s?.endDate||task.end_date||"",
-        endHour:s?.endHour||""
+        endHour:s?.endHour||HOURS[HOURS.length-1]  // Default a última hora si está vacío
       };
     });
     setModal({mode:"edit",task});
@@ -667,10 +667,6 @@ export default function App() {
       endDate:s.endDate||null,
       endHour:s.endHour||null
     }));
-    
-    console.log("🔍 GUARDANDO SCHEDULES:", JSON.stringify(scheds, null, 2));
-    console.log("🔍 FORM END_DATE:", form.end_date);
-    console.log("🔍 FORM SCHEDULES:", JSON.stringify(form.schedules, null, 2));
     
     if(modal.mode==="add"){
       // Si hay múltiples assignees, crear una tarea por cada persona
