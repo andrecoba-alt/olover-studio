@@ -98,7 +98,7 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
   const ttype = form.is_recurring?"rec":form.end_date?"range":"normal";
 
   return (
-    <div onClick={()=>setModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,backdropFilter:"blur(3px)"}}>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,backdropFilter:"blur(3px)"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,padding:"1.75rem",width:520,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:"1rem"}}>
           <div style={{width:14,height:14,borderRadius:"50%",background:form.color}}/>
