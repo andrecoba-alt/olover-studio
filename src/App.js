@@ -67,7 +67,7 @@ const PRESETS = [
   { name:"Rose",     navBg:"#1A0F14", sideBg:"#261520", topBg:"#ffffff", accent:"#E06B9A" },
   { name:"Sand",     navBg:"#2A2318", sideBg:"#332B1E", topBg:"#FDFAF6", accent:"#C49A3C" },
 ];
-const EMPTY = { title:"",link:"",status:"pendiente",comments:"",client_id:"",color:"#E8623A",duration:1,assignees:[],schedules:[],refs:[],is_recurring:false,rec_days:[],date:"",hour:HOURS[0],end_date:"" };
+const EMPTY = { title:"",link:"",status:"pendiente",comments:"",client_id:"",color:"#E8623A",duration:1,assignees:[],schedules:[],refs:[],is_recurring:false,rec_days:[],date:"",hour:HOURS[0],end_date:"",_rangeMode:false };
 
 // ─── Task Modal ───────────────────────────────────────────────────────────────
 function TaskModal({ modal, form, setForm, setModal, members, boards, clients, onSave, onDelete, onDuplicate }) {
@@ -95,7 +95,7 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
   const mOf = id => members.find(m=>m.id===id);
   const isEdit = modal.mode==="edit";
   const refs = form.refs||[];
-  const ttype = form.is_recurring?"rec":form.end_date?"range":"normal";
+  const ttype = form.is_recurring?"rec":form._rangeMode?"range":"normal";
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,backdropFilter:"blur(3px)"}}>
@@ -146,7 +146,7 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           <div style={{background:"#FAFAF9",border:"1px solid #E8E4DE",borderRadius:10,padding:"10px 12px",marginBottom:"1.1rem"}}>
             <p style={{fontSize:9,color:"#aaa",textTransform:"uppercase",letterSpacing:1,margin:"0 0 8px",fontWeight:500}}>Horario por persona</p>
             {form.schedules.map(s=>{const m=mOf(s.memberId);if(!m)return null;
-              const isRange=!!form.end_date;
+              const isRange=form._rangeMode||!!form.end_date;
               return(
               <div key={s.memberId} style={{marginBottom:12,padding:8,background:"#fff",borderRadius:8}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
@@ -204,7 +204,7 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           {[["normal","Normal","—"],["rec","Recurrente","↻"],["range","Rango","↔"]].map(([t,l,ic])=>{
             const a=ttype===t;
             return(
-              <button key={t} onClick={()=>{if(t==="rec")setForm(p=>({...p,is_recurring:true,end_date:""}));else if(t==="range")setForm(p=>({...p,is_recurring:false,end_date:p.end_date||""}));else setForm(p=>({...p,is_recurring:false,end_date:""}));}}
+              <button key={t} onClick={()=>{if(t==="rec")setForm(p=>({...p,is_recurring:true,end_date:"",_rangeMode:false}));else if(t==="range")setForm(p=>({...p,is_recurring:false,_rangeMode:true}));else setForm(p=>({...p,is_recurring:false,end_date:"",_rangeMode:false}));}}
                 style={{flex:1,background:a?"#F4F2EE":"transparent",border:`1.5px solid ${a?form.color:"#E8E4DE"}`,borderRadius:8,padding:"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
                 <span style={{fontSize:18,fontWeight:300,color:a?form.color:"#bbb"}}>{ic}</span>
                 <span style={{fontSize:10,fontWeight:a?600:400,color:a?"#1C1C1C":"#999"}}>{l}</span>
@@ -242,7 +242,7 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
               <label style={lbS}>Fecha fin <span style={{color:"#bbb",fontWeight:400}}>(opcional)</span></label>
               <input type="date" value={form.end_date||""} onChange={e=>sf("end_date",e.target.value)} style={{...inS,borderBottomColor:"#E8E4DE",fontSize:13}}/>
             </div>
-            {!form.end_date&&(
+            {!form._rangeMode&&(
               <div style={{flex:1}}>
                 <label style={lbS}>Hora</label>
                 <select value={form.hour||HOURS[0]} onChange={e=>{const v=e.target.value;setForm(p=>({...p,hour:v,schedules:p.schedules.map(s=>({...s,hour:v}))}));}} style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer"}}>
@@ -254,7 +254,7 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
         )}
 
         {/* Duración — solo cuando NO hay personas asignadas y NO es rango */}
-        {!form.end_date&&!form.is_recurring&&form.schedules.length===0&&(
+        {!form._rangeMode&&!form.is_recurring&&form.schedules.length===0&&(
           <>
             <label style={lbS}>Duración (horas)</label>
             <select value={form.duration||1} onChange={e=>sf("duration",parseInt(e.target.value))} style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer",marginBottom:"1.1rem"}}>
@@ -570,7 +570,7 @@ export default function App() {
     const aids=assigns.filter(a=>a.task_id===task.id).map(a=>a.member_id);
     const scheds=aids.map(m=>{const s=(task.assignee_schedules||[]).find(s=>s.memberId===m);return{memberId:m,date:s?.date||task.date||"",hour:s?.hour||task.hour||HOURS[0],endDate:s?.endDate||task.end_date||"",endHour:s?.endHour||HOURS[HOURS.length-1]};});
     setModal({mode:"edit",task});
-    setForm({title:task.title,link:task.link||"",status:task.status||"pendiente",comments:task.comments||"",client_id:task.client_id||"",color:task.color||"#FFFFFF",duration:task.duration||1,assignees:aids,schedules:scheds,refs:task.reference_links||[],date:scheds[0]?.date||task.date||"",hour:scheds[0]?.hour||task.hour||HOURS[0],end_date:task.end_date||"",is_recurring:task.is_recurring||false,rec_days:task.recurrence_days||[]});
+    setForm({title:task.title,link:task.link||"",status:task.status||"pendiente",comments:task.comments||"",client_id:task.client_id||"",color:task.color||"#FFFFFF",duration:task.duration||1,assignees:aids,schedules:scheds,refs:task.reference_links||[],date:scheds[0]?.date||task.date||"",hour:scheds[0]?.hour||task.hour||HOURS[0],end_date:task.end_date||"",is_recurring:task.is_recurring||false,rec_days:task.recurrence_days||[],_rangeMode:!!(task.end_date)});
   };
 
   const saveModal=async()=>{
