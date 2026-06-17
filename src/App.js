@@ -26,6 +26,15 @@ const lum       = h => { try{const r=parseInt(h.slice(1,3),16)/255,g=parseInt(h.
 const textOn    = bg => lum(bg||"#fff")>0.5?"#1C1C1C":"#ffffff";
 const http      = url => url&&!url.startsWith("http")?`https://${url}`:url;
 
+// Etiqueta legible para una semana dado su lunes
+const weekLabel = (monday) => {
+  const fri = addDays(monday, 4);
+  if (monday.getMonth() === fri.getMonth()) {
+    return `${monday.getDate()} – ${fri.getDate()} ${MONTHS[fri.getMonth()]} ${fri.getFullYear()}`;
+  }
+  return `${monday.getDate()} ${MONTHS[monday.getMonth()]} – ${fri.getDate()} ${MONTHS[fri.getMonth()]} ${fri.getFullYear()}`;
+};
+
 const taskOccursOn = (task, iso) => {
   if (!iso) return false;
   if (task.is_recurring && (task.recurrence_days||[]).length>0) {
@@ -33,6 +42,15 @@ const taskOccursOn = (task, iso) => {
   }
   if (task.end_date&&task.date) return iso>=task.date&&iso<=task.end_date;
   return task.date===iso;
+};
+
+// Devuelve true si la tarea ocurre en algún día de la semana [monday, monday+4]
+const taskOccursInWeek = (task, monday) => {
+  for (let i = 0; i < 5; i++) {
+    const iso = toISO(addDays(monday, i));
+    if (taskOccursOn(task, iso)) return true;
+  }
+  return false;
 };
 
 let _n = Date.now();
@@ -51,7 +69,7 @@ const PRESETS = [
 ];
 const EMPTY = { title:"",link:"",status:"pendiente",comments:"",client_id:"",color:"#E8623A",duration:1,assignees:[],schedules:[],refs:[],is_recurring:false,rec_days:[],date:"",hour:HOURS[0],end_date:"" };
 
-// ─── Task Modal (outside main component to prevent re-render focus loss) ─────
+// ─── Task Modal ───────────────────────────────────────────────────────────────
 function TaskModal({ modal, form, setForm, setModal, members, boards, clients, onSave, onDelete, onDuplicate }) {
   const titleRef = useRef();
   const sf = (k,v) => setForm(p=>({...p,[k]:v}));
@@ -63,16 +81,13 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
   const toggleA = mid => {
     const sel=form.assignees.includes(mid);
     const newA=sel?form.assignees.filter(id=>id!==mid):[...form.assignees,mid];
-    
-    // Si estamos agregando un nuevo miembro, crear schedule con valores por defecto
     let newSchedule = {
       memberId:mid,
       date:form.date||"",
       hour:form.hour||HOURS[0],
       endDate:"",
-      endHour:HOURS[HOURS.length-1]  // Default a última hora
+      endHour:HOURS[HOURS.length-1]
     };
-    
     const newS=sel?form.schedules.filter(s=>s.memberId!==mid):[...form.schedules,newSchedule];
     setForm(p=>({...p,assignees:newA,schedules:newS}));
   };
@@ -85,7 +100,6 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
   return (
     <div onClick={()=>setModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,backdropFilter:"blur(3px)"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,padding:"1.75rem",width:520,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.15)"}}>
-        {/* Header */}
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:"1rem"}}>
           <div style={{width:14,height:14,borderRadius:"50%",background:form.color}}/>
           <p style={{fontFamily:"'DM Serif Display',serif",fontSize:"1.15rem",color:"#1C1C1C",margin:0,flex:1}}>{isEdit?"Editar tarea":"Nueva tarea"}</p>
@@ -98,7 +112,6 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           </div>
         </div>
 
-        {/* Título — ref asegura foco estable */}
         <label style={lbS}>Nombre</label>
         <input
           ref={titleRef}
@@ -108,14 +121,12 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           style={{...inS,borderBottomColor:form.color,marginBottom:"1.1rem"}}
         />
 
-        {/* Cliente */}
         <label style={lbS}>Cliente</label>
         <select value={form.client_id} onChange={e=>sf("client_id",e.target.value)} style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",marginBottom:"1.1rem",cursor:"pointer"}}>
           <option value="">— Sin cliente —</option>
           {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
 
-        {/* Asignados */}
         <label style={lbS}>Asignar a</label>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
           {members.map(m=>{
@@ -131,7 +142,6 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           })}
         </div>
 
-        {/* Horario por persona */}
         {form.schedules.length>0&&!form.is_recurring&&(
           <div style={{background:"#FAFAF9",border:"1px solid #E8E4DE",borderRadius:10,padding:"10px 12px",marginBottom:"1.1rem"}}>
             <p style={{fontSize:9,color:"#aaa",textTransform:"uppercase",letterSpacing:1,margin:"0 0 8px",fontWeight:500}}>Horario por persona</p>
@@ -189,7 +199,6 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           </div>
         )}
 
-        {/* Tipo */}
         <label style={lbS}>Tipo</label>
         <div style={{display:"flex",gap:8,marginBottom:"1.1rem"}}>
           {[["normal","Normal","—"],["rec","Recurrente","↻"],["range","Rango","↔"]].map(([t,l,ic])=>{
@@ -204,7 +213,6 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           })}
         </div>
 
-        {/* Recurrencia */}
         {form.is_recurring&&(
           <div style={{background:"#F0F7FF",border:"1px solid #B5D4F4",borderRadius:10,padding:"10px 12px",marginBottom:"1.1rem"}}>
             <p style={{fontSize:9,color:"#3A6FE8",textTransform:"uppercase",letterSpacing:1,margin:"0 0 8px",fontWeight:500}}>Días</p>
@@ -223,7 +231,6 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           </div>
         )}
 
-        {/* Fechas */}
         {!form.is_recurring&&(
           <div style={{display:"flex",gap:12,marginBottom:"1.1rem"}}>
             <div style={{flex:1}}>
@@ -245,7 +252,6 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           </div>
         )}
 
-        {/* Duración */}
         {!form.end_date&&!form.is_recurring&&(
           <>
             <label style={lbS}>Duración (horas)</label>
@@ -255,7 +261,6 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           </>
         )}
 
-        {/* Estado */}
         <label style={lbS}>Estado</label>
         <div style={{display:"flex",gap:6,marginBottom:"1.1rem"}}>
           {STATUSES.map(s=>(
@@ -266,11 +271,9 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           ))}
         </div>
 
-        {/* Instrucciones */}
         <label style={lbS}>Instrucciones</label>
         <textarea value={form.comments} onChange={e=>sf("comments",e.target.value)} placeholder="Instrucciones para el equipo..." style={{width:"100%",border:"1px solid #E8E4DE",borderRadius:10,padding:"10px 12px",fontSize:13,outline:"none",background:"#FAFAF9",color:"#1C1C1C",resize:"vertical",minHeight:80,fontFamily:"'DM Sans',sans-serif",marginBottom:"1.1rem",boxSizing:"border-box"}}/>
 
-        {/* Links referencia */}
         <label style={lbS}>Links de referencia</label>
         {refs.map((r,i)=>(
           <div key={i} style={{display:"flex",gap:6,marginBottom:6,alignItems:"center"}}>
@@ -284,20 +287,18 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           <span style={{fontSize:16}}>+</span> Agregar link
         </button>
 
-        {/* Link entregable */}
         <label style={lbS}>Link entregable</label>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:"1.5rem"}}>
           <input value={form.link} onChange={e=>sf("link",e.target.value)} placeholder="https://..." style={{...inS,borderBottomColor:"#E8E4DE",flex:1}}/>
           {form.link&&<a href={http(form.link)} target="_blank" rel="noreferrer" style={{fontSize:18,color:"#3A6FE8",textDecoration:"none"}}>↗</a>}
         </div>
 
-        {/* Botones */}
         <div style={{display:"flex",gap:8,justifyContent:"space-between",flexWrap:"wrap"}}>
           <div style={{display:"flex",gap:8}}>
             {isEdit&&<button onClick={onDelete} style={{background:"none",border:"1px solid #FFD0C8",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",color:"#E8623A"}}>Eliminar</button>}
             {isEdit&&(
               <div style={{position:"relative"}}>
-                <select 
+                <select
                   onChange={(e)=>{
                     if(e.target.value){
                       if(window.confirm(`¿Duplicar esta tarea para ${members.find(m=>m.id===e.target.value)?.name}?`)){
@@ -346,7 +347,7 @@ export default function App() {
   const [form, setForm]         = useState(EMPTY);
   const [newClient, setNewClient] = useState("");
   const [quick, setQuick]       = useState("");
-  const [openG, setOpenG]       = useState({ pendiente:true,asignada:true,terminada:true });
+  const [openG, setOpenG]       = useState({ pendiente:true,asignada:true,revision:true,terminada:true });
   const [openC, setOpenC]       = useState({});
   const [views, setViews]       = useState({ animadores:"weekly",disenadores:"weekly",proveedores:"weekly" });
   const [wStarts, setWStarts]   = useState({ animadores:getMonday(today),disenadores:getMonday(today),proveedores:getMonday(today) });
@@ -356,14 +357,16 @@ export default function App() {
   const [showTrash, setShowTrash] = useState(false);
   const [sidebarMemberFilter, setSidebarMemberFilter] = useState("");
   const [resizing, setResizing] = useState(null);
-  const [editingLunch, setEditingLunch] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [statuses, setStatuses] = useState([]);
+  // ── NUEVO: buscador ────────────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState("");
+  // Semanas colapsadas en la sección terminadas (key: ISO del lunes)
+  const [collapsedWeeks, setCollapsedWeeks] = useState({});
+
   const logoRef = useRef();
   const dragRef = useRef(null);
-  
-  // Función para guardar estado en el historial
+
   const saveToHistory = useCallback((action, data) => {
     setHistory(prev => {
       const newHistory = prev.slice(0, historyIndex + 1);
@@ -373,72 +376,36 @@ export default function App() {
     });
     setHistoryIndex(prev => Math.min(prev + 1, 9));
   }, [historyIndex]);
-  
-  // Función para deshacer
+
   const undo = useCallback(async () => {
     if (historyIndex < 0) return;
     const item = history[historyIndex];
-    
     switch(item.action) {
-      case 'CREATE_TASK':
-        await supabase.from("tasks").delete().eq("id", item.data.id);
-        break;
-      case 'UPDATE_TASK':
-        await supabase.from("tasks").update(item.data.oldValues).eq("id", item.data.id);
-        break;
-      case 'DELETE_TASK':
-        await supabase.from("tasks").update({ deleted_at: null }).eq("id", item.data.id);
-        break;
-      case 'MOVE_TASK':
-        await supabase.from("tasks").update({ 
-          date: item.data.oldDate, 
-          hour: item.data.oldHour 
-        }).eq("id", item.data.id);
-        break;
+      case 'CREATE_TASK': await supabase.from("tasks").delete().eq("id", item.data.id); break;
+      case 'UPDATE_TASK': await supabase.from("tasks").update(item.data.oldValues).eq("id", item.data.id); break;
+      case 'DELETE_TASK': await supabase.from("tasks").update({ deleted_at: null }).eq("id", item.data.id); break;
+      case 'MOVE_TASK': await supabase.from("tasks").update({ date: item.data.oldDate, hour: item.data.oldHour }).eq("id", item.data.id); break;
     }
-    
     setHistoryIndex(prev => prev - 1);
   }, [history, historyIndex]);
-  
-  // Función para rehacer
+
   const redo = useCallback(async () => {
     if (historyIndex >= history.length - 1) return;
     const item = history[historyIndex + 1];
-    
     switch(item.action) {
-      case 'CREATE_TASK':
-        await supabase.from("tasks").insert(item.data.task);
-        break;
-      case 'UPDATE_TASK':
-        await supabase.from("tasks").update(item.data.newValues).eq("id", item.data.id);
-        break;
-      case 'DELETE_TASK':
-        await supabase.from("tasks").update({ deleted_at: new Date().toISOString() }).eq("id", item.data.id);
-        break;
-      case 'MOVE_TASK':
-        await supabase.from("tasks").update({ 
-          date: item.data.newDate, 
-          hour: item.data.newHour 
-        }).eq("id", item.data.id);
-        break;
+      case 'CREATE_TASK': await supabase.from("tasks").insert(item.data.task); break;
+      case 'UPDATE_TASK': await supabase.from("tasks").update(item.data.newValues).eq("id", item.data.id); break;
+      case 'DELETE_TASK': await supabase.from("tasks").update({ deleted_at: new Date().toISOString() }).eq("id", item.data.id); break;
+      case 'MOVE_TASK': await supabase.from("tasks").update({ date: item.data.newDate, hour: item.data.newHour }).eq("id", item.data.id); break;
     }
-    
     setHistoryIndex(prev => prev + 1);
   }, [history, historyIndex]);
-  
-  // Atajos de teclado para Undo/Redo
+
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault();
-        redo();
-      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
     };
-    
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [undo, redo]);
@@ -454,25 +421,16 @@ export default function App() {
       const delta=e.clientY-resizing.startY;
       const hoursDelta=Math.round(delta/HOUR_H);
       const newDur=Math.max(1,Math.min(10,resizing.startDur+hoursDelta));
-      if(newDur!==resizing.currentDur){
-        setResizing(r=>({...r,currentDur:newDur}));
-      }
+      if(newDur!==resizing.currentDur) setResizing(r=>({...r,currentDur:newDur}));
     };
-
     const handleMouseUp=()=>{
-      if(resizing&&resizing.currentDur!==resizing.startDur){
-        updateTask(resizing.taskId,{duration:resizing.currentDur});
-      }
+      if(resizing&&resizing.currentDur!==resizing.startDur) updateTask(resizing.taskId,{duration:resizing.currentDur});
       setResizing(null);
     };
-
     if(resizing){
       document.addEventListener("mousemove",handleMouseMove);
       document.addEventListener("mouseup",handleMouseUp);
-      return()=>{
-        document.removeEventListener("mousemove",handleMouseMove);
-        document.removeEventListener("mouseup",handleMouseUp);
-      };
+      return()=>{ document.removeEventListener("mousemove",handleMouseMove); document.removeEventListener("mouseup",handleMouseUp); };
     }
   },[resizing]);
 
@@ -522,13 +480,18 @@ export default function App() {
 
   const mTasks=useCallback(mid=>{const ids=assigns.filter(a=>a.member_id===mid).map(a=>a.task_id);return tasks.filter(t=>ids.includes(t.id)&&!t.deleted_at);},[assigns,tasks]);
   const bTasks=useCallback(()=>{const mids=bMems.map(m=>m.id);const ids=new Set(assigns.filter(a=>mids.includes(a.member_id)).map(a=>a.task_id));return tasks.filter(t=>ids.has(t.id)&&!t.deleted_at);},[assigns,tasks,bMems]);
+
+  // ── Tareas del board filtradas por semana activa ───────────────────────────
   const sTasks=useCallback(()=>{
     const mids=bMems.map(m=>m.id);
     const ids=new Set(assigns.filter(a=>mids.includes(a.member_id)).map(a=>a.task_id));
     const unass=tasks.filter(t=>t.board_id===boardId&&assigns.filter(a=>a.task_id===t.id).length===0&&!t.deleted_at);
     const ass=tasks.filter(t=>ids.has(t.id)&&!t.deleted_at);
-    return [...new Map([...unass,...ass].map(t=>[t.id,t])).values()];
-  },[assigns,tasks,bMems,boardId]);
+    const all=[...new Map([...unass,...ass].map(t=>[t.id,t])).values()];
+    // Filtrar por semana activa
+    return all.filter(t=>taskOccursInWeek(t, wStart));
+  },[assigns,tasks,bMems,boardId,wStart]);
+
   const trashTasks=useCallback(()=>{
     const mids=bMems.map(m=>m.id);
     const ids=new Set(assigns.filter(a=>mids.includes(a.member_id)).map(a=>a.task_id));
@@ -536,26 +499,13 @@ export default function App() {
     const ass=tasks.filter(t=>ids.has(t.id)&&t.deleted_at);
     return [...new Map([...unass,...ass].map(t=>[t.id,t])).values()];
   },[assigns,tasks,bMems,boardId]);
+
   const tAss=useCallback(tid=>{const ids=assigns.filter(a=>a.task_id===tid).map(a=>a.member_id);return members.filter(m=>ids.includes(m.id));},[assigns,members]);
 
   const getMSch=(task,mid)=>{
-    if(!task.assignee_schedules || task.assignee_schedules.length===0){
-      return {date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""};
-    }
-    
-    // Buscar el schedule específico de este miembro
+    if(!task.assignee_schedules||task.assignee_schedules.length===0) return {date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""};
     const memberSchedule=task.assignee_schedules.find(s=>s.memberId===mid);
-    
-    if(memberSchedule){
-      return {
-        date:memberSchedule.date||task.date,
-        hour:memberSchedule.hour||task.hour||HOURS[0],
-        endDate:memberSchedule.endDate||task.end_date||"",
-        endHour:memberSchedule.endHour||""
-      };
-    }
-    
-    // Si no encontró schedule específico, devolver valores por defecto
+    if(memberSchedule) return {date:memberSchedule.date||task.date,hour:memberSchedule.hour||task.hour||HOURS[0],endDate:memberSchedule.endDate||task.end_date||"",endHour:memberSchedule.endHour||""};
     return {date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""};
   };
   const cOf=id=>clients.find(c=>c.id===id);
@@ -564,19 +514,9 @@ export default function App() {
     const id=uid();
     const allA=[...new Set([...(mid?[mid]:[]),...(f.assignees||[])])];
     const scheds=allA.map(m=>{const s=(f.schedules||[]).find(s=>s.memberId===m);return{memberId:m,date:s?.date||date||"",hour:s?.hour||hour||HOURS[0],endDate:s?.endDate||"",endHour:s?.endHour||""};});
-    const taskData={
-      id,board_id:boardId,member_id:allA[0]||null,
-      title:f.title||"Sin título",status:f.status||"pendiente",
-      link:f.link||"",comments:f.comments||"",client_id:f.client_id||"",
-      color:f.color||"#FFFFFF",duration:f.duration||1,
-      reference_links:f.refs||[],assignee_schedules:scheds,
-      date:scheds[0]?.date||date||null,hour:scheds[0]?.hour||hour||HOURS[0],
-      is_recurring:f.is_recurring||false,recurrence_days:f.rec_days||[],end_date:f.end_date||null,
-    };
-    
+    const taskData={id,board_id:boardId,member_id:allA[0]||null,title:f.title||"Sin título",status:f.status||"pendiente",link:f.link||"",comments:f.comments||"",client_id:f.client_id||"",color:f.color||"#FFFFFF",duration:f.duration||1,reference_links:f.refs||[],assignee_schedules:scheds,date:scheds[0]?.date||date||null,hour:scheds[0]?.hour||hour||HOURS[0],is_recurring:f.is_recurring||false,recurrence_days:f.rec_days||[],end_date:f.end_date||null};
     await supabase.from("tasks").insert(taskData);
     if(allA.length>0)await supabase.from("task_assignments").insert(allA.map(m=>({id:uid(),task_id:id,member_id:m})));
-    
     saveToHistory('CREATE_TASK',{id,task:taskData});
   };
 
@@ -595,37 +535,20 @@ export default function App() {
     if(assignees!==undefined){await supabase.from("task_assignments").delete().eq("task_id",id);if(assignees.length>0)await supabase.from("task_assignments").insert(assignees.map(m=>({id:uid(),task_id:id,member_id:m})));}
   };
 
-  const delTask=async id=>{
-    saveToHistory('DELETE_TASK',{id});
-    await supabase.from("tasks").update({deleted_at:new Date().toISOString()}).eq("id",id);
-  };
+  const delTask=async id=>{saveToHistory('DELETE_TASK',{id});await supabase.from("tasks").update({deleted_at:new Date().toISOString()}).eq("id",id);};
   const restoreTask=async id=>{await supabase.from("tasks").update({deleted_at:null}).eq("id",id);};
   const permDelTask=async id=>{await supabase.from("task_assignments").delete().eq("task_id",id);await supabase.from("tasks").delete().eq("id",id);};
   const dupTask=async(task,targetMemberId=null)=>{
     const aids=assigns.filter(a=>a.task_id===task.id).map(a=>a.member_id);
     const{id:_,created_at,...rest}=task;
     const id=uid();
-    
-    // Si se proporciona targetMemberId, duplicar para esa persona específica
-    const newAssignees = targetMemberId ? [targetMemberId] : aids;
-    const newSchedules = targetMemberId 
-      ? [{memberId:targetMemberId,date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""}]
-      : task.assignee_schedules;
-    
-    await supabase.from("tasks").insert({
-      ...rest,
-      id,
-      title:targetMemberId ? task.title : `${task.title} (copia)`, // No agregar "(copia)" si es duplicación dirigida
-      member_id:newAssignees[0]||null,
-      assignee_schedules:newSchedules
-    });
-    
-    if(newAssignees.length>0){
-      await supabase.from("task_assignments").insert(newAssignees.map(m=>({id:uid(),task_id:id,member_id:m})));
-    }
-    
+    const newAssignees=targetMemberId?[targetMemberId]:aids;
+    const newSchedules=targetMemberId?[{memberId:targetMemberId,date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""}]:task.assignee_schedules;
+    await supabase.from("tasks").insert({...rest,id,title:targetMemberId?task.title:`${task.title} (copia)`,member_id:newAssignees[0]||null,assignee_schedules:newSchedules});
+    if(newAssignees.length>0) await supabase.from("task_assignments").insert(newAssignees.map(m=>({id:uid(),task_id:id,member_id:m})));
     setModal(null);
   };
+
   const addMember=async bid=>{const bm=members.filter(m=>m.board_id===bid);const colors=["#E8623A","#3A6FE8","#7B6BE0","#3A9E8A","#C49A3C","#E06B9A"];const b=boards.find(x=>x.id===bid);await supabase.from("members").insert({id:uid(),board_id:bid,name:`${b?.label||""} ${bm.length+1}`,color:colors[bm.length%colors.length],position:bm.length});};
   const updMember=async(id,p)=>supabase.from("members").update(p).eq("id",id);
   const delMember=async id=>{await supabase.from("task_assignments").delete().eq("member_id",id);await supabase.from("members").delete().eq("id",id);};
@@ -643,60 +566,33 @@ export default function App() {
 
   const openEdit=task=>{
     const aids=assigns.filter(a=>a.task_id===task.id).map(a=>a.member_id);
-    const scheds=aids.map(m=>{
-      const s=(task.assignee_schedules||[]).find(s=>s.memberId===m);
-      return{
-        memberId:m,
-        date:s?.date||task.date||"",
-        hour:s?.hour||task.hour||HOURS[0],
-        endDate:s?.endDate||task.end_date||"",
-        endHour:s?.endHour||HOURS[HOURS.length-1]  // Default a última hora si está vacío
-      };
-    });
+    const scheds=aids.map(m=>{const s=(task.assignee_schedules||[]).find(s=>s.memberId===m);return{memberId:m,date:s?.date||task.date||"",hour:s?.hour||task.hour||HOURS[0],endDate:s?.endDate||task.end_date||"",endHour:s?.endHour||HOURS[HOURS.length-1]};});
     setModal({mode:"edit",task});
     setForm({title:task.title,link:task.link||"",status:task.status||"pendiente",comments:task.comments||"",client_id:task.client_id||"",color:task.color||"#FFFFFF",duration:task.duration||1,assignees:aids,schedules:scheds,refs:task.reference_links||[],date:scheds[0]?.date||task.date||"",hour:scheds[0]?.hour||task.hour||HOURS[0],end_date:task.end_date||"",is_recurring:task.is_recurring||false,rec_days:task.recurrence_days||[]});
   };
 
   const saveModal=async()=>{
     if(!form.title.trim())return;
-    
-    const scheds=form.schedules.map(s=>({
-      memberId:s.memberId,
-      date:s.date||form.date||null,
-      hour:s.hour||form.hour||HOURS[0],
-      endDate:s.endDate||null,
-      endHour:s.endHour||null
-    }));
-    
+    const scheds=form.schedules.map(s=>({memberId:s.memberId,date:s.date||form.date||null,hour:s.hour||form.hour||HOURS[0],endDate:s.endDate||null,endHour:s.endHour||null}));
     if(modal.mode==="add"){
-      // Si hay múltiples assignees, crear una tarea por cada persona
-      if(form.assignees.length > 1){
+      if(form.assignees.length>1){
         for(const assigneeId of form.assignees){
-          const assigneeSchedule = scheds.find(s => s.memberId === assigneeId) || scheds[0];
-          await addTask({
-            ...form,
-            assignees:[assigneeId],
-            schedules:[assigneeSchedule]
-          }, assigneeId, form.date, form.hour);
+          const assigneeSchedule=scheds.find(s=>s.memberId===assigneeId)||scheds[0];
+          await addTask({...form,assignees:[assigneeId],schedules:[assigneeSchedule]},assigneeId,form.date,form.hour);
         }
       } else {
         await addTask({...form,schedules:scheds},modal.mid,form.date,form.hour);
       }
-    }
-    else{
+    } else {
       await updateTask(modal.task.id,{title:form.title,link:form.link,status:form.status,comments:form.comments,client_id:form.client_id,color:form.color,duration:form.duration,reference_links:form.refs,assignees:form.assignees,schedules:scheds,date:form.is_recurring?null:(scheds[0]?.date||form.date||null),hour:scheds[0]?.hour||form.hour||HOURS[0],end_date:form.end_date||null,is_recurring:form.is_recurring,recurrence_days:form.rec_days});
     }
-    
     setModal(null);
   };
 
   const onDragStart=(e,task)=>{e.stopPropagation();dragRef.current=task;};
   const onDrop=async(e,mid,date,hour)=>{
     e.preventDefault();const t=dragRef.current;if(!t)return;
-    
-    // Guardar estado anterior para Undo
     saveToHistory('MOVE_TASK',{id:t.id,oldDate:t.date,oldHour:t.hour,newDate:date,newHour:hour});
-    
     const aids=assigns.filter(a=>a.task_id===t.id).map(a=>a.member_id);
     const bMids=bMems.map(m=>m.id);const cross=aids.filter(id=>!bMids.includes(id));
     const newA=[...cross,mid];
@@ -717,15 +613,15 @@ export default function App() {
     </div>
   );
 
+  // ── Componente sidebar de tareas ──────────────────────────────────────────
   const SideTasks=()=>{
+    // ── Papelera ────────────────────────────────────────────────────────────
     if(showTrash){
       const trash=trashTasks();
       const getDaysLeft=t=>{
         if(!t.deleted_at)return 30;
-        const del=new Date(t.deleted_at);
-        const now=new Date();
-        const diff=30-Math.floor((now-del)/(1000*60*60*24));
-        return Math.max(0,diff);
+        const del=new Date(t.deleted_at);const now=new Date();
+        return Math.max(0,30-Math.floor((now-del)/(1000*60*60*24)));
       };
       return(
         <div style={{flex:1,overflowY:"auto",padding:"0.5rem"}}>
@@ -735,9 +631,7 @@ export default function App() {
           </div>
           {trash.length===0&&<p style={{fontSize:11,color:"#333",textAlign:"center",marginTop:"1.5rem"}}>La papelera está vacía</p>}
           {trash.map(t=>{
-            const ass=tAss(t.id);
-            const daysLeft=getDaysLeft(t);
-            const cl=cOf(t.client_id);
+            const ass=tAss(t.id);const daysLeft=getDaysLeft(t);const cl=cOf(t.client_id);
             return(
               <div key={t.id} style={{padding:"10px 8px",margin:"4px 0",background:"#252525",borderLeft:`3px solid ${t.color||"#444"}`,borderRadius:"0 6px 6px 0"}}>
                 <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
@@ -748,7 +642,7 @@ export default function App() {
                 {ass.length>0&&<div style={{display:"flex",gap:2,marginBottom:6,flexWrap:"wrap"}}>{ass.map(m=><span key={m.id} style={{fontSize:9,background:m.color+"33",color:m.color,borderRadius:10,padding:"1px 5px"}}>{m.name}</span>)}</div>}
                 <div style={{display:"flex",gap:4}}>
                   <button onClick={()=>restoreTask(t.id)} style={{flex:1,background:brand.accent,border:"none",borderRadius:6,padding:"5px 8px",fontSize:10,color:textOn(brand.accent),cursor:"pointer",fontWeight:600}}>↺ Restaurar</button>
-                  <button onClick={()=>{if(window.confirm("¿Eliminar permanentemente? No se puede deshacer."))permDelTask(t.id);}} style={{background:"#E8623A22",border:"1px solid #E8623A",borderRadius:6,padding:"5px 8px",fontSize:10,color:"#E8623A",cursor:"pointer"}}>✕</button>
+                  <button onClick={()=>{if(window.confirm("¿Eliminar permanentemente?"))permDelTask(t.id);}} style={{background:"#E8623A22",border:"1px solid #E8623A",borderRadius:6,padding:"5px 8px",fontSize:10,color:"#E8623A",cursor:"pointer"}}>✕</button>
                 </div>
               </div>
             );
@@ -756,47 +650,107 @@ export default function App() {
         </div>
       );
     }
+
+    // ── Buscador: resultados globales ────────────────────────────────────────
+    if(searchQuery.trim()){
+      const q=searchQuery.toLowerCase();
+      const allNonDeleted=tasks.filter(t=>!t.deleted_at&&t.title.toLowerCase().includes(q));
+      return(
+        <div style={{flex:1,overflowY:"auto",padding:"0.5rem"}}>
+          <p style={{fontSize:9,color:"#555",textTransform:"uppercase",letterSpacing:1,margin:"4px 6px 8px",fontWeight:500}}>{allNonDeleted.length} resultado{allNonDeleted.length!==1?"s":""}</p>
+          {allNonDeleted.length===0&&<p style={{fontSize:11,color:"#333",textAlign:"center",marginTop:"1.5rem"}}>Sin resultados</p>}
+          {allNonDeleted.map(t=>{
+            const ass=tAss(t.id);const cl=cOf(t.client_id);
+            const brd=boards.find(b=>b.id===t.board_id);
+            const st=STATUSES.find(s=>s.value===t.status);
+            return(
+              <div key={t.id} draggable onDragStart={e=>onDragStart(e,t)} onDoubleClick={()=>openEdit(t)}
+                style={{padding:"8px 8px",margin:"3px 0",background:"#252525",borderLeft:`3px solid ${t.color||"#444"}`,borderRadius:"0 6px 6px 0",cursor:"grab"}}>
+                <div style={{display:"flex",alignItems:"flex-start",gap:5}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontSize:11,color:"#ddd",margin:"0 0 3px",lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title}</p>
+                    <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+                      {cl&&<span style={{fontSize:9,color:"#888"}}>{cl.name}</span>}
+                      {brd&&<span style={{fontSize:9,color:brd.accent,background:brd.accent+"22",borderRadius:4,padding:"1px 4px"}}>{brd.label}</span>}
+                      {st&&<span style={{fontSize:9,color:st.color,background:st.bg,borderRadius:4,padding:"1px 4px"}}>{st.label}</span>}
+                      {t.date&&<span style={{fontSize:9,color:"#666"}}>{t.date}</span>}
+                    </div>
+                    {ass.length>0&&<div style={{display:"flex",gap:2,marginTop:3,flexWrap:"wrap"}}>{ass.map(m=><span key={m.id} style={{fontSize:9,background:m.color+"33",color:m.color,borderRadius:10,padding:"1px 5px"}}>{m.name}</span>)}</div>}
+                  </div>
+                  <button onClick={e=>{e.stopPropagation();openEdit(t);}} style={{background:"none",border:"none",color:"#555",fontSize:11,cursor:"pointer",padding:0,flexShrink:0}}>✎</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // ── Vista normal: tareas de la semana activa ─────────────────────────────
     const all=sTasks();
     let fil=fClient?all.filter(t=>t.client_id===fClient):all;
-    
-    // Filtrar por persona si hay un filtro activo
-    if(sidebarMemberFilter){
-      fil=fil.filter(t=>{
-        const ass=assigns.filter(a=>a.task_id===t.id).map(a=>a.member_id);
-        return ass.includes(sidebarMemberFilter);
-      });
-    }
-    
+    if(sidebarMemberFilter) fil=fil.filter(t=>{const ass=assigns.filter(a=>a.task_id===t.id).map(a=>a.member_id);return ass.includes(sidebarMemberFilter);});
+
+    // Separar terminadas del resto
+    const nonTerminadas=fil.filter(t=>t.status!=="terminada");
+    const terminadas=fil.filter(t=>t.status==="terminada");
+
+    // Agrupar terminadas por semana (lunes de la semana de su fecha)
+    const terminadasPorSemana={};
+    terminadas.forEach(t=>{
+      const d=fromISO(t.date);
+      if(!d)return;
+      const lunes=getMonday(d);
+      const key=toISO(lunes);
+      if(!terminadasPorSemana[key])terminadasPorSemana[key]={monday:lunes,tasks:[]};
+      terminadasPorSemana[key].tasks.push(t);
+    });
+    // Ordenar semanas más reciente primero
+    const semanasSorted=Object.entries(terminadasPorSemana).sort((a,b)=>b[0].localeCompare(a[0]));
+    const currentWeekKey=toISO(wStart);
+
+    const renderTask=(t)=>{
+      const ass=tAss(t.id);
+      return(
+        <div key={t.id} draggable onDragStart={e=>onDragStart(e,t)} onDoubleClick={()=>openEdit(t)}
+          style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 6px",margin:"2px 0",background:"#252525",borderLeft:`3px solid ${t.color||"#444"}`,borderRadius:"0 6px 6px 0",cursor:"grab"}}>
+          <div style={{flex:1,minWidth:0}}>
+            <p style={{fontSize:11,color:t.status==="terminada"?"#555":"#ddd",margin:0,lineHeight:1.3,textDecoration:t.status==="terminada"?"line-through":"none",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title}</p>
+            {ass.length>0&&<div style={{display:"flex",gap:2,marginTop:3,flexWrap:"wrap"}}>{ass.map(m=><span key={m.id} style={{fontSize:9,background:m.color+"33",color:m.color,borderRadius:10,padding:"1px 5px"}}>{m.name}</span>)}</div>}
+          </div>
+          <button onClick={e=>{e.stopPropagation();openEdit(t);}} style={{background:"none",border:"none",color:"#555",fontSize:11,cursor:"pointer",padding:0}}>✎</button>
+        </div>
+      );
+    };
+
     return(
       <div style={{flex:1,overflowY:"auto",padding:"0.5rem"}}>
         {/* Filtro por persona */}
-        <div style={{marginBottom:12,padding:"8px 10px",background:"#2a2a2a",borderRadius:8}}>
-          <label style={{fontSize:9,color:"#888",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>Filtrar por persona</label>
-          <select value={sidebarMemberFilter} onChange={e=>setSidebarMemberFilter(e.target.value)} style={{width:"100%",background:"#1a1a1a",border:"1px solid #333",borderRadius:6,padding:"6px 8px",fontSize:11,color:"#ddd",outline:"none",cursor:"pointer"}}>
+        <div style={{marginBottom:8,padding:"6px 10px",background:"#2a2a2a",borderRadius:8}}>
+          <label style={{fontSize:9,color:"#888",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>Filtrar por persona</label>
+          <select value={sidebarMemberFilter} onChange={e=>setSidebarMemberFilter(e.target.value)} style={{width:"100%",background:"#1a1a1a",border:"1px solid #333",borderRadius:6,padding:"5px 8px",fontSize:11,color:"#ddd",outline:"none",cursor:"pointer"}}>
             <option value="">Todas las personas</option>
             {bMems.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         </div>
-        
-        {STATUSES.map(st=>{
-          const stT=fil.filter(t=>t.status===st.value);const isO=openG[st.value];
+
+        {/* Label semana activa */}
+        <div style={{padding:"4px 6px",marginBottom:6}}>
+          <span style={{fontSize:9,color:"#444",textTransform:"uppercase",letterSpacing:1}}>Semana {weekLabel(wStart)}</span>
+        </div>
+
+        {/* Estados no-terminados */}
+        {STATUSES.filter(s=>s.value!=="terminada").map(st=>{
+          const stT=nonTerminadas.filter(t=>t.status===st.value);
+          const isO=openG[st.value];
           const byC={};stT.forEach(t=>{const k=t.client_id||"_";if(!byC[k])byC[k]=[];byC[k].push(t);});
           return(
             <div key={st.value} style={{marginBottom:6}}>
-              <button 
-                onClick={()=>setOpenG(p=>({...p,[st.value]:!p[st.value]}))} 
-                onDragOver={(e)=>{e.preventDefault();e.currentTarget.style.opacity="0.7";}}
-                onDragLeave={(e)=>{e.currentTarget.style.opacity="1";}}
-                onDrop={async(e)=>{
-                  e.preventDefault();
-                  e.currentTarget.style.opacity="1";
-                  const task=dragRef.current;
-                  if(!task)return;
-                  // Reiniciar fecha/hora y cambiar estado
-                  await updateTask(task.id,{status:st.value,date:null,hour:null,end_date:null});
-                  dragRef.current=null;
-                }}
-                style={{display:"flex",alignItems:"center",gap:8,background:st.bg,border:`1px solid ${st.color}33`,cursor:"pointer",width:"100%",padding:"8px 10px",borderRadius:8,transition:"all 0.2s"}}>
+              <button
+                onClick={()=>setOpenG(p=>({...p,[st.value]:!p[st.value]}))}
+                onDragOver={(e)=>{e.preventDefault();}}
+                onDrop={async(e)=>{e.preventDefault();const task=dragRef.current;if(!task)return;await updateTask(task.id,{status:st.value,date:null,hour:null,end_date:null});dragRef.current=null;}}
+                style={{display:"flex",alignItems:"center",gap:8,background:st.bg,border:`1px solid ${st.color}33`,cursor:"pointer",width:"100%",padding:"8px 10px",borderRadius:8}}>
                 <span style={{fontSize:11,fontWeight:700,color:st.color,textTransform:"uppercase",letterSpacing:1,flex:1,textAlign:"left"}}>{st.label}</span>
                 <span style={{fontSize:11,fontWeight:700,color:st.color,minWidth:28,textAlign:"center"}}>{stT.length}</span>
                 <span style={{fontSize:12,color:st.color}}>{isO?"▾":"▸"}</span>
@@ -810,25 +764,43 @@ export default function App() {
                       <span style={{fontSize:10,color:cl?cl.color:"#555",fontWeight:500}}>{cl?cl.name:"Sin cliente"}</span>
                       <span style={{fontSize:9,color:"#444",marginLeft:"auto"}}>{cT.length} {isOC?"▾":"▸"}</span>
                     </button>
-                    {isOC&&cT.map(t=>{
-                      const ass=tAss(t.id);
-                      return(
-                        <div key={t.id} draggable onDragStart={e=>onDragStart(e,t)} onDoubleClick={()=>openEdit(t)} style={{display:"flex",alignItems:"flex-start",gap:5,padding:"5px 6px",margin:"2px 0",background:"#252525",borderLeft:`3px solid ${t.color||"#444"}`,borderRadius:"0 6px 6px 0",cursor:"grab"}}>
-                          <div style={{flex:1,minWidth:0}}>
-                            <p style={{fontSize:11,color:t.status==="terminada"?"#555":"#ddd",margin:0,lineHeight:1.3,textDecoration:t.status==="terminada"?"line-through":"none",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title}</p>
-                            {ass.length>0&&<div style={{display:"flex",gap:2,marginTop:3,flexWrap:"wrap"}}>{ass.map(m=><span key={m.id} style={{fontSize:9,background:m.color+"33",color:m.color,borderRadius:10,padding:"1px 5px"}}>{m.name}</span>)}</div>}
-                          </div>
-                          <button onClick={e=>{e.stopPropagation();openEdit(t);}} style={{background:"none",border:"none",color:"#555",fontSize:11,cursor:"pointer",padding:0}}>✎</button>
-                        </div>
-                      );
-                    })}
+                    {isOC&&cT.map(t=>renderTask(t))}
                   </div>
                 );
               })}
             </div>
           );
         })}
-        {fil.length===0&&<p style={{fontSize:11,color:"#333",textAlign:"center",marginTop:"1.5rem"}}>Sin tareas</p>}
+
+        {/* ── Terminadas agrupadas por semana ─────────────────────────────── */}
+        {(terminadas.length>0||semanasSorted.length>0)&&(
+          <div style={{marginBottom:6}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,background:STATUSES.find(s=>s.value==="terminada").bg,border:`1px solid ${STATUSES.find(s=>s.value==="terminada").color}33`,padding:"8px 10px",borderRadius:8,marginBottom:4}}>
+              <span style={{fontSize:11,fontWeight:700,color:STATUSES.find(s=>s.value==="terminada").color,textTransform:"uppercase",letterSpacing:1,flex:1}}>Terminada</span>
+              <span style={{fontSize:11,fontWeight:700,color:STATUSES.find(s=>s.value==="terminada").color,minWidth:28,textAlign:"center"}}>{terminadas.length}</span>
+            </div>
+            {semanasSorted.map(([key,{monday,tasks:wTasks}])=>{
+              const isCurrentWeek=key===currentWeekKey;
+              const isCollapsed=collapsedWeeks[key]!==undefined?collapsedWeeks[key]:!isCurrentWeek;
+              return(
+                <div key={key} style={{marginLeft:8,marginBottom:4}}>
+                  <button
+                    onClick={()=>setCollapsedWeeks(p=>({...p,[key]:!isCollapsed}))}
+                    style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",cursor:"pointer",width:"100%",padding:"4px 6px",borderRadius:6,background:isCurrentWeek?"#2a2a2a":"transparent"}}>
+                    <span style={{fontSize:10,color:isCurrentWeek?"#D4E157":"#555",fontWeight:isCurrentWeek?600:400,flex:1,textAlign:"left"}}>
+                      {isCurrentWeek?"Esta semana · ":""}{weekLabel(monday)}
+                    </span>
+                    <span style={{fontSize:9,color:"#555",marginLeft:4}}>{wTasks.length}</span>
+                    <span style={{fontSize:11,color:"#555"}}>{isCollapsed?"▸":"▾"}</span>
+                  </button>
+                  {!isCollapsed&&wTasks.map(t=>renderTask(t))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {fil.length===0&&<p style={{fontSize:11,color:"#333",textAlign:"center",marginTop:"1.5rem"}}>Sin tareas esta semana</p>}
       </div>
     );
   };
@@ -837,13 +809,11 @@ export default function App() {
     const cl=cOf(t.client_id);
     const isResizing=resizing&&resizing.taskId===t.id;
     const dur=blockDuration||(isAllDay?HOURS.length:(isResizing?resizing.currentDur:(t.duration||1)));
-    
     const handleResizeStart=(e)=>{
       if(isAllDay||t.end_date)return;
       e.stopPropagation();
       setResizing({taskId:t.id,startY:e.clientY,startDur:t.duration||1,currentDur:t.duration||1});
     };
-
     return(
       <div draggable={!isResizing} onDragStart={e=>!isResizing&&onDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
         style={{position:"absolute",left:2,right:2,top:2,height:dur*HOUR_H-4,background:t.color||"#FFFFFF",borderRadius:6,padding:"3px 6px",cursor:isResizing?"ns-resize":"grab",overflow:"hidden",zIndex:2,boxShadow:"0 1px 4px rgba(0,0,0,0.15)",border:"1px solid #ddd"}}>
@@ -851,10 +821,7 @@ export default function App() {
         {cl&&<p style={{fontSize:9,color:textOn(t.color||"#FFFFFF"),opacity:0.8,margin:0}}>{cl.name}</p>}
         {!isAllDay&&!t.end_date&&dur>1&&<p style={{fontSize:9,color:textOn(t.color||"#FFFFFF"),opacity:0.7,margin:0}}>{dur}h</p>}
         {!isAllDay&&!t.end_date&&(
-          <div 
-            onMouseDown={handleResizeStart}
-            style={{position:"absolute",bottom:0,left:0,right:0,height:10,cursor:"ns-resize",background:"transparent",zIndex:10}}
-          />
+          <div onMouseDown={handleResizeStart} style={{position:"absolute",bottom:0,left:0,right:0,height:10,cursor:"ns-resize",background:"transparent",zIndex:10}}/>
         )}
       </div>
     );
@@ -863,6 +830,7 @@ export default function App() {
   return(
     <div style={{display:"flex",height:"100vh",background:"#F4F2EE",fontFamily:"'DM Sans',sans-serif",overflow:"hidden"}}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
+      {/* Nav lateral */}
       <div style={{width:64,background:brand.navBg,display:"flex",flexDirection:"column",alignItems:"center",paddingTop:14,gap:4,zIndex:20,flexShrink:0}}>
         <div style={{width:38,height:38,borderRadius:10,background:brand.logo?"transparent":brand.accent,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10,overflow:"hidden"}}>
           {brand.logo?<img src={brand.logo} alt="logo" style={{width:"100%",height:"100%",objectFit:"contain"}}/>:<span style={{color:textOn(brand.accent),fontSize:12,fontWeight:700}}>{brand.name.slice(0,2).toUpperCase()}</span>}
@@ -877,6 +845,7 @@ export default function App() {
         <button onClick={()=>setSideOpen(o=>!o)} style={{width:44,height:44,borderRadius:12,border:"none",cursor:"pointer",background:"transparent",color:"#555",fontSize:18,marginBottom:12}}>☰</button>
       </div>
 
+      {/* Sidebar */}
       {sideOpen&&board&&(
         <div style={{width:270,background:brand.sideBg,display:"flex",flexDirection:"column",zIndex:10,flexShrink:0}}>
           <div style={{padding:"1.1rem 1rem 0.75rem",borderBottom:"1px solid #2a2a2a"}}>
@@ -894,6 +863,19 @@ export default function App() {
                   <span style={{fontSize:11,color:"#bbb"}}>{m.name}</span>
                 </div>
               ))}
+            </div>
+          </div>
+          {/* ── Buscador ─────────────────────────────────────────────────── */}
+          <div style={{padding:"0.5rem 1rem",borderBottom:"1px solid #2a2a2a"}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,background:"#2a2a2a",borderRadius:8,padding:"5px 10px"}}>
+              <span style={{fontSize:13,color:"#555"}}>🔍</span>
+              <input
+                value={searchQuery}
+                onChange={e=>setSearchQuery(e.target.value)}
+                placeholder="Buscar tarea..."
+                style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:11,color:"#ddd"}}
+              />
+              {searchQuery&&<button onClick={()=>setSearchQuery("")} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:13,padding:0}}>✕</button>}
             </div>
           </div>
           <div style={{padding:"0.5rem 1rem",borderBottom:"1px solid #2a2a2a"}}>
@@ -922,6 +904,7 @@ export default function App() {
         </div>
       )}
 
+      {/* Área principal */}
       {board&&(
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
           <div style={{background:brand.topBg,borderBottom:"1px solid #E8E4DE",padding:"0.6rem 1.25rem",display:"flex",alignItems:"center",gap:"0.75rem",flexWrap:"wrap"}}>
@@ -944,10 +927,6 @@ export default function App() {
                 <option value="">Todos</option>
                 {bMems.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:4,marginLeft:12,opacity:0.3,pointerEvents:"none"}}>
-              <button disabled title="Próximamente" style={{background:"#f5f5f5",border:"1px solid #E8E4DE",borderRadius:8,padding:"6px 10px",fontSize:16,cursor:"not-allowed",color:"#ccc"}}>↶</button>
-              <button disabled title="Próximamente" style={{background:"#f5f5f5",border:"1px solid #E8E4DE",borderRadius:8,padding:"6px 10px",fontSize:16,cursor:"not-allowed",color:"#ccc"}}>↷</button>
             </div>
             {view==="weekly"?(
               <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}}>
@@ -1004,87 +983,41 @@ export default function App() {
                           {wDates.map((d,di)=>{
                             const iso=toISO(d);
                             const isLunchHour=m.lunch_start&&m.lunch_end&&hour>=m.lunch_start&&hour<m.lunch_end;
-                            
-                            // Filtrar tareas que deben mostrarse en esta celda
                             const tasksToRender=[];
-                            
                             mt.forEach(t=>{
                               if(!taskOccursOn(t,iso))return;
-                              
-                              // Tareas tipo Rango con horarios individuales
                               if(t.end_date){
                                 const sch=getMSch(t,m.id);
-                                
-                                // Verificar si este miembro tiene horario individual configurado
-                                if(sch && sch.date && sch.endDate && sch.endHour){
-                                  const startDate=sch.date;
-                                  const endDate=sch.endDate;
-                                  const startHour=sch.hour||HOURS[0];
-                                  const endHour=sch.endHour;
-                                  
-                                  // Verificar si esta fecha está en el rango de este miembro
-                                  if(iso<startDate || iso>endDate)return;
-                                  
-                                  // Calcular horas para este día específico
-                                  let dayStartHour=HOURS[0];
-                                  let dayEndHour=HOURS[HOURS.length-1];
-                                  
-                                  // Primer día: empieza a la hora especificada
-                                  if(iso===startDate){
-                                    dayStartHour=startHour;
-                                  }
-                                  
-                                  // Último día: termina a la hora especificada
-                                  if(iso===endDate){
-                                    dayEndHour=endHour;
-                                  }
-                                  
-                                  const startIdx=HOURS.indexOf(dayStartHour);
-                                  const endIdx=HOURS.indexOf(dayEndHour);
-                                  
-                                  if(startIdx===-1 || endIdx===-1)return;
-                                  
-                                  // Mostrar en la hora de inicio del día
-                                  if(hour===dayStartHour){
-                                    const duration=endIdx-startIdx+1;
-                                    tasksToRender.push({task:t,duration:duration>0?duration:1});
-                                  }
+                                if(sch&&sch.date&&sch.endDate&&sch.endHour){
+                                  const startDate=sch.date;const endDate=sch.endDate;
+                                  const startHour=sch.hour||HOURS[0];const endHour=sch.endHour;
+                                  if(iso<startDate||iso>endDate)return;
+                                  let dayStartHour=HOURS[0];let dayEndHour=HOURS[HOURS.length-1];
+                                  if(iso===startDate)dayStartHour=startHour;
+                                  if(iso===endDate)dayEndHour=endHour;
+                                  const startIdx=HOURS.indexOf(dayStartHour);const endIdx=HOURS.indexOf(dayEndHour);
+                                  if(startIdx===-1||endIdx===-1)return;
+                                  if(hour===dayStartHour){const duration=endIdx-startIdx+1;tasksToRender.push({task:t,duration:duration>0?duration:1});}
                                 }else{
-                                  // Sin horario individual para este miembro, mostrar todo el día
-                                  if(hour===HOURS[0]){
-                                    tasksToRender.push({task:t,duration:HOURS.length});
-                                  }
+                                  if(hour===HOURS[0])tasksToRender.push({task:t,duration:HOURS.length});
                                 }
-                              }
-                              // Tareas normales (no Rango)
-                              else{
+                              }else{
                                 const sch=getMSch(t,m.id);
-                                if((sch.hour||HOURS[0])===hour){
-                                  tasksToRender.push({task:t,duration:t.duration||1});
-                                }
+                                if((sch.hour||HOURS[0])===hour)tasksToRender.push({task:t,duration:t.duration||1});
                               }
                             });
-                            
                             return(
                               <div key={di} onDragOver={e=>!isLunchHour&&e.preventDefault()} onDrop={e=>!isLunchHour&&onDrop(e,m.id,iso,hour)} onClick={()=>!isLunchHour&&tasksToRender.length===0&&openAdd(m.id,iso,hour)}
                                 style={{height:HOUR_H,borderLeft:"1px solid #E8E4DE",borderTop:"1px solid #F0EDE8",position:"relative",cursor:isLunchHour?"not-allowed":(tasksToRender.length===0?"pointer":"default"),background:"transparent"}}>
                                 {tasksToRender.map((item,idx)=>{
-                                  // Calcular duración visual sumando horas de almuerzo si la tarea las atraviesa
                                   let visualDuration=item.duration;
                                   if(m.lunch_start&&m.lunch_end&&!item.task.end_date){
-                                    const taskStartHour=hour;
-                                    const taskStartIdx=HOURS.indexOf(taskStartHour);
-                                    const taskEndIdx=taskStartIdx+item.duration-1;
-                                    const lunchStartIdx=HOURS.indexOf(m.lunch_start);
-                                    const lunchEndIdx=HOURS.indexOf(m.lunch_end);
-                                    
-                                    // Si la tarea atraviesa las horas de almuerzo, sumar esas horas a la duración visual
+                                    const taskStartIdx=HOURS.indexOf(hour);const taskEndIdx=taskStartIdx+item.duration-1;
+                                    const lunchStartIdx=HOURS.indexOf(m.lunch_start);const lunchEndIdx=HOURS.indexOf(m.lunch_end);
                                     if(taskStartIdx<lunchEndIdx&&taskEndIdx>=lunchStartIdx){
-                                      const lunchHours=lunchEndIdx-lunchStartIdx;
-                                      visualDuration=item.duration+lunchHours;
+                                      visualDuration=item.duration+(lunchEndIdx-lunchStartIdx);
                                     }
                                   }
-                                  
                                   return <TBlock key={item.task.id+"-"+idx} t={item.task} isAllDay={false} blockDuration={visualDuration} member={m}/>;
                                 })}
                                 {isLunchHour&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,opacity:0.6,zIndex:100,background:"repeating-linear-gradient(45deg,#f9f9f9,#f9f9f9 10px,#f0f0f0 10px,#f0f0f0 20px)",pointerEvents:"none"}}>🍽</div>}
@@ -1111,38 +1044,49 @@ export default function App() {
                   <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
                     {DAYS_S.map(d=><div key={d} style={{textAlign:"center",fontSize:9,letterSpacing:2,color:"#bbb",textTransform:"uppercase",padding:"4px 0"}}>{d}</div>)}
                   </div>
-                  {weeks.map((week,wi)=>(
-                    <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
-                      {week.map((day,di)=>{
-                        const isT=day&&day===today.getDate()&&cMonth===today.getMonth()&&cYear===today.getFullYear();
-                        const dateObj=day?new Date(cYear,cMonth,day):null;
-                        const hol=dateObj?isHol(dateObj):null;
-                        const iso=dateObj?toISO(dateObj):null;
-                        const dt=iso?allT.filter(t=>taskOccursOn(t,iso)):[];
-                        return(
-                          <div key={di} onDragOver={e=>{if(day)e.preventDefault();}} onDrop={e=>{if(iso)onDrop(e,bMems[0]?.id,iso,"8:00");}}
-                            style={{background:day?(hol?"#FFF5F5":"#fff"):"transparent",border:isT?`2px solid ${board.accent}`:day?"1px solid #E8E4DE":"none",borderRadius:10,minHeight:100,padding:5}}>
-                            {day&&<>
-                              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:3}}>
-                                <span style={{fontSize:11,fontWeight:isT?700:400,color:isT?board.accent:hol?"#E06B9A":"#aaa"}}>{day}</span>
-                                {hol&&<span style={{fontSize:9,color:"#E06B9A"}} title={hol}>🇨🇴</span>}
-                              </div>
-                              {dt.map(t=>{const cl=cOf(t.client_id);return(
-                                <div key={t.id} draggable onDragStart={e=>onDragStart(e,t)} onDoubleClick={()=>openEdit(t)}
-                                  style={{background:t.color||"#E8623A",borderRadius:4,padding:"2px 5px",fontSize:9,color:textOn(t.color||"#E8623A"),marginBottom:2,cursor:"pointer",overflow:"hidden"}}>
-                                  <div style={{display:"flex",alignItems:"center",gap:3}}>
-                                    <span style={{flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{t.title}</span>
-                                    {t.link&&<span>🔗</span>}
-                                  </div>
-                                  {cl&&<div style={{fontSize:8,opacity:0.85}}>{cl.name}</div>}
+                  {weeks.map((week,wi)=>{
+                    // Al hacer clic en una semana del mes → navegar a esa semana en vista semanal
+                    const firstDay=week.find(d=>d!==null);
+                    const weekMonday=firstDay?getMonday(new Date(cYear,cMonth,firstDay)):null;
+                    return(
+                      <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
+                        {week.map((day,di)=>{
+                          const isT=day&&day===today.getDate()&&cMonth===today.getMonth()&&cYear===today.getFullYear();
+                          const dateObj=day?new Date(cYear,cMonth,day):null;
+                          const hol=dateObj?isHol(dateObj):null;
+                          const iso=dateObj?toISO(dateObj):null;
+                          const dt=iso?allT.filter(t=>taskOccursOn(t,iso)):[];
+                          return(
+                            <div key={di}
+                              onDragOver={e=>{if(day)e.preventDefault();}}
+                              onDrop={e=>{if(iso)onDrop(e,bMems[0]?.id,iso,"8:00 AM");}}
+                              onDoubleClick={()=>{
+                                // Doble clic en día del mes → ir a esa semana
+                                if(weekMonday){setWS(weekMonday);setView("weekly");}
+                              }}
+                              style={{background:day?(hol?"#FFF5F5":"#fff"):"transparent",border:isT?`2px solid ${board.accent}`:day?"1px solid #E8E4DE":"none",borderRadius:10,minHeight:100,padding:5,cursor:day?"pointer":"default"}}>
+                              {day&&<>
+                                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:3}}>
+                                  <span style={{fontSize:11,fontWeight:isT?700:400,color:isT?board.accent:hol?"#E06B9A":"#aaa"}}>{day}</span>
+                                  {hol&&<span style={{fontSize:9,color:"#E06B9A"}} title={hol}>🇨🇴</span>}
                                 </div>
-                              );})}
-                            </>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
+                                {dt.map(t=>{const cl=cOf(t.client_id);return(
+                                  <div key={t.id} draggable onDragStart={e=>onDragStart(e,t)} onDoubleClick={e=>{e.stopPropagation();openEdit(t);}}
+                                    style={{background:t.color||"#E8623A",borderRadius:4,padding:"2px 5px",fontSize:9,color:textOn(t.color||"#E8623A"),marginBottom:2,cursor:"pointer",overflow:"hidden"}}>
+                                    <div style={{display:"flex",alignItems:"center",gap:3}}>
+                                      <span style={{flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{t.title}</span>
+                                      {t.link&&<span>🔗</span>}
+                                    </div>
+                                    {cl&&<div style={{fontSize:8,opacity:0.85}}>{cl.name}</div>}
+                                  </div>
+                                );})}
+                              </>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
                   <div style={{display:"flex",gap:"0.75rem",marginTop:"1rem",justifyContent:"center",flexWrap:"wrap"}}>
                     {bMems.map(m=>(
                       <div key={m.id} style={{display:"flex",alignItems:"center",gap:5}}>
@@ -1151,6 +1095,7 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+                  <p style={{fontSize:10,color:"#ccc",textAlign:"center",marginTop:8}}>Doble clic en un día para ir a esa semana</p>
                 </div>
               </div>
             );
@@ -1158,7 +1103,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Settings inline */}
+      {/* Settings */}
       {settOpen&&(
         <div onClick={()=>setSettOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:400}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,width:540,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column"}}>
