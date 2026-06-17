@@ -231,7 +231,8 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           </div>
         )}
 
-        {!form.is_recurring&&(
+        {/* Fechas globales — solo cuando NO hay personas asignadas con horario */}
+        {!form.is_recurring&&form.schedules.length===0&&(
           <div style={{display:"flex",gap:12,marginBottom:"1.1rem"}}>
             <div style={{flex:1}}>
               <label style={lbS}>Fecha inicio</label>
@@ -252,7 +253,8 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           </div>
         )}
 
-        {!form.end_date&&!form.is_recurring&&(
+        {/* Duración — solo cuando NO hay personas asignadas y NO es rango */}
+        {!form.end_date&&!form.is_recurring&&form.schedules.length===0&&(
           <>
             <label style={lbS}>Duración (horas)</label>
             <select value={form.duration||1} onChange={e=>sf("duration",parseInt(e.target.value))} style={{width:"100%",border:"none",borderBottom:"2px solid #E8E4DE",padding:"6px 0",fontSize:13,outline:"none",background:"transparent",color:"#1C1C1C",cursor:"pointer",marginBottom:"1.1rem"}}>
