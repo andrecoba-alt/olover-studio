@@ -516,7 +516,10 @@ export default function App() {
     const id=uid();
     const allA=[...new Set([...(mid?[mid]:[]),...(f.assignees||[])])];
     const scheds=allA.map(m=>{const s=(f.schedules||[]).find(s=>s.memberId===m);return{memberId:m,date:s?.date||date||"",hour:s?.hour||hour||HOURS[0],endDate:s?.endDate||"",endHour:s?.endHour||""};});
-    const taskData={id,board_id:boardId,member_id:allA[0]||null,title:f.title||"Sin título",status:f.status||"pendiente",link:f.link||"",comments:f.comments||"",client_id:f.client_id||"",color:f.color||"#FFFFFF",duration:f.duration||1,reference_links:f.refs||[],assignee_schedules:scheds,date:scheds[0]?.date||date||null,hour:scheds[0]?.hour||hour||HOURS[0],is_recurring:f.is_recurring||false,recurrence_days:f.rec_days||[],end_date:f.end_date||null};
+    // end_date: usar el que viene en f (ya resuelto por saveModal), o derivar del schedule
+    const resolvedEndDate = f.end_date||scheds[0]?.endDate||null;
+    const resolvedDate = scheds[0]?.date||date||null;
+    const taskData={id,board_id:boardId,member_id:allA[0]||null,title:f.title||"Sin título",status:f.status||"pendiente",link:f.link||"",comments:f.comments||"",client_id:f.client_id||"",color:f.color||"#FFFFFF",duration:f.duration||1,reference_links:f.refs||[],assignee_schedules:scheds,date:resolvedDate,hour:scheds[0]?.hour||hour||HOURS[0],is_recurring:f.is_recurring||false,recurrence_days:f.rec_days||[],end_date:resolvedEndDate||null};
     await supabase.from("tasks").insert(taskData);
     if(allA.length>0)await supabase.from("task_assignments").insert(allA.map(m=>({id:uid(),task_id:id,member_id:m})));
     saveToHistory('CREATE_TASK',{id,task:taskData});
@@ -576,17 +579,35 @@ export default function App() {
   const saveModal=async()=>{
     if(!form.title.trim())return;
     const scheds=form.schedules.map(s=>({memberId:s.memberId,date:s.date||form.date||null,hour:s.hour||form.hour||HOURS[0],endDate:s.endDate||null,endHour:s.endHour||null}));
+
+    // Derivar end_date: si hay schedules en modo rango, usar el endDate más tardío entre todos los schedules
+    // Si no hay schedules (sin asignados), usar form.end_date directamente
+    let resolvedEndDate = form.end_date||null;
+    if(form._rangeMode && scheds.length>0){
+      const endDates = scheds.map(s=>s.endDate).filter(Boolean);
+      if(endDates.length>0) resolvedEndDate = endDates.sort().reverse()[0];
+    }
+
+    // Derivar date: el startDate más temprano de los schedules
+    let resolvedDate = form.date||null;
+    if(scheds.length>0){
+      const startDates = scheds.map(s=>s.date).filter(Boolean);
+      if(startDates.length>0) resolvedDate = startDates.sort()[0];
+    }
+
     if(modal.mode==="add"){
       if(form.assignees.length>1){
         for(const assigneeId of form.assignees){
           const assigneeSchedule=scheds.find(s=>s.memberId===assigneeId)||scheds[0];
-          await addTask({...form,assignees:[assigneeId],schedules:[assigneeSchedule]},assigneeId,form.date,form.hour);
+          const aDate=assigneeSchedule?.date||resolvedDate;
+          const aEndDate=form._rangeMode?(assigneeSchedule?.endDate||resolvedEndDate):null;
+          await addTask({...form,end_date:aEndDate,assignees:[assigneeId],schedules:[assigneeSchedule]},assigneeId,aDate,form.hour);
         }
       } else {
-        await addTask({...form,schedules:scheds},modal.mid,form.date,form.hour);
+        await addTask({...form,end_date:resolvedEndDate,date:resolvedDate,schedules:scheds},modal.mid,resolvedDate,form.hour);
       }
     } else {
-      await updateTask(modal.task.id,{title:form.title,link:form.link,status:form.status,comments:form.comments,client_id:form.client_id,color:form.color,duration:form.duration,reference_links:form.refs,assignees:form.assignees,schedules:scheds,date:form.is_recurring?null:(scheds[0]?.date||form.date||null),hour:scheds[0]?.hour||form.hour||HOURS[0],end_date:form.end_date||null,is_recurring:form.is_recurring,recurrence_days:form.rec_days});
+      await updateTask(modal.task.id,{title:form.title,link:form.link,status:form.status,comments:form.comments,client_id:form.client_id,color:form.color,duration:form.duration,reference_links:form.refs,assignees:form.assignees,schedules:scheds,date:form.is_recurring?null:resolvedDate,hour:scheds[0]?.hour||form.hour||HOURS[0],end_date:form.is_recurring?null:resolvedEndDate,is_recurring:form.is_recurring,recurrence_days:form.rec_days});
     }
     setModal(null);
   };
