@@ -26,7 +26,6 @@ const lum       = h => { try{const r=parseInt(h.slice(1,3),16)/255,g=parseInt(h.
 const textOn    = bg => lum(bg||"#fff")>0.5?"#1C1C1C":"#ffffff";
 const http      = url => url&&!url.startsWith("http")?`https://${url}`:url;
 
-// Etiqueta legible para una semana dado su lunes
 const weekLabel = (monday) => {
   const fri = addDays(monday, 4);
   if (monday.getMonth() === fri.getMonth()) {
@@ -44,7 +43,6 @@ const taskOccursOn = (task, iso) => {
   return task.date===iso;
 };
 
-// Devuelve true si la tarea ocurre en algún día de la semana [monday, monday+4]
 const taskOccursInWeek = (task, monday) => {
   for (let i = 0; i < 5; i++) {
     const iso = toISO(addDays(monday, i));
@@ -67,7 +65,9 @@ const PRESETS = [
   { name:"Rose",     navBg:"#1A0F14", sideBg:"#261520", topBg:"#ffffff", accent:"#E06B9A" },
   { name:"Sand",     navBg:"#2A2318", sideBg:"#332B1E", topBg:"#FDFAF6", accent:"#C49A3C" },
 ];
-const EMPTY = { title:"",link:"",status:"pendiente",comments:"",client_id:"",color:"#E8623A",duration:1,assignees:[],schedules:[],refs:[],is_recurring:false,rec_days:[],date:"",hour:HOURS[0],end_date:"",_rangeMode:false };
+
+// FIX: endHour siempre inicializado explícitamente en EMPTY y en todos los lugares donde se crea un schedule
+const EMPTY = { title:"",link:"",status:"pendiente",comments:"",client_id:"",color:"#E8623A",duration:1,assignees:[],schedules:[],refs:[],is_recurring:false,rec_days:[],date:"",hour:HOURS[0],end_date:"",endHour:HOURS[HOURS.length-1],_rangeMode:false };
 
 // ─── Task Modal ───────────────────────────────────────────────────────────────
 function TaskModal({ modal, form, setForm, setModal, members, boards, clients, onSave, onDelete, onDuplicate }) {
@@ -81,16 +81,18 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
   const toggleA = mid => {
     const sel=form.assignees.includes(mid);
     const newA=sel?form.assignees.filter(id=>id!==mid):[...form.assignees,mid];
-    let newSchedule = {
-      memberId:mid,
-      date:form.date||"",
-      hour:form.hour||HOURS[0],
-      endDate:"",
-      endHour:HOURS[HOURS.length-1]
+    // FIX: endHour siempre inicializado con valor por defecto, nunca vacío
+    const newSchedule = {
+      memberId: mid,
+      date: form.date||"",
+      hour: form.hour||HOURS[0],
+      endDate: form.end_date||"",
+      endHour: form.endHour||HOURS[HOURS.length-1],
     };
     const newS=sel?form.schedules.filter(s=>s.memberId!==mid):[...form.schedules,newSchedule];
     setForm(p=>({...p,assignees:newA,schedules:newS}));
   };
+
   const updSch=(mid,field,val)=>setForm(p=>({...p,schedules:p.schedules.map(s=>s.memberId===mid?{...s,[field]:val}:s)}));
   const mOf = id => members.find(m=>m.id===id);
   const isEdit = modal.mode==="edit";
@@ -174,6 +176,7 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
                       </div>
                       <div style={{flex:1}}>
                         <label style={{fontSize:9,color:"#999",display:"block",marginBottom:3}}>Hora fin</label>
+                        {/* FIX: fallback explícito a HOURS[last] nunca a string vacío */}
                         <select value={s.endHour||HOURS[HOURS.length-1]} onChange={e=>updSch(s.memberId,"endHour",e.target.value)} style={{width:"100%",border:"1px solid #E8E4DE",padding:"4px 6px",fontSize:11,outline:"none",borderRadius:6,cursor:"pointer"}}>
                           {HOURS.map(h=><option key={h} value={h}>{h}</option>)}
                         </select>
@@ -231,7 +234,6 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           </div>
         )}
 
-        {/* Fechas globales — solo cuando NO hay personas asignadas con horario */}
         {!form.is_recurring&&form.schedules.length===0&&(
           <div style={{display:"flex",gap:12,marginBottom:"1.1rem"}}>
             <div style={{flex:1}}>
@@ -253,7 +255,6 @@ function TaskModal({ modal, form, setForm, setModal, members, boards, clients, o
           </div>
         )}
 
-        {/* Duración — solo cuando NO hay personas asignadas y NO es rango */}
         {!form._rangeMode&&!form.is_recurring&&form.schedules.length===0&&(
           <>
             <label style={lbS}>Duración (horas)</label>
@@ -361,9 +362,7 @@ export default function App() {
   const [resizing, setResizing] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  // ── NUEVO: buscador ────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
-  // Semanas colapsadas en la sección terminadas (key: ISO del lunes)
   const [collapsedWeeks, setCollapsedWeeks] = useState({});
 
   const logoRef = useRef();
@@ -483,15 +482,29 @@ export default function App() {
   const mTasks=useCallback(mid=>{const ids=assigns.filter(a=>a.member_id===mid).map(a=>a.task_id);return tasks.filter(t=>ids.includes(t.id)&&!t.deleted_at);},[assigns,tasks]);
   const bTasks=useCallback(()=>{const mids=bMems.map(m=>m.id);const ids=new Set(assigns.filter(a=>mids.includes(a.member_id)).map(a=>a.task_id));return tasks.filter(t=>ids.has(t.id)&&!t.deleted_at);},[assigns,tasks,bMems]);
 
-  // ── Tareas del board filtradas por semana activa ───────────────────────────
+  // ── FIX PRINCIPAL: sTasks con lógica correcta de visibilidad ─────────────
+  // - Terminadas: solo si ocurren en la semana activa
+  // - Sin fecha: siempre visibles (tareas flotantes pendientes)
+  // - Con fecha: visibles si fecha >= inicio semana activa (no se pierden)
+  // - Recurrentes: siempre visibles si no están terminadas
   const sTasks=useCallback(()=>{
     const mids=bMems.map(m=>m.id);
     const ids=new Set(assigns.filter(a=>mids.includes(a.member_id)).map(a=>a.task_id));
     const unass=tasks.filter(t=>t.board_id===boardId&&assigns.filter(a=>a.task_id===t.id).length===0&&!t.deleted_at);
     const ass=tasks.filter(t=>ids.has(t.id)&&!t.deleted_at);
     const all=[...new Map([...unass,...ass].map(t=>[t.id,t])).values()];
-    // Filtrar por semana activa
-    return all.filter(t=>taskOccursInWeek(t, wStart));
+    const wStartISO=toISO(wStart);
+    return all.filter(t=>{
+      // Terminadas: solo aparecen en su semana
+      if(t.status==="terminada") return taskOccursInWeek(t, wStart);
+      // Recurrentes activas: siempre visibles
+      if(t.is_recurring) return true;
+      // Sin fecha: siempre visibles (pendientes sin asignar)
+      if(!t.date) return true;
+      // Con fecha: visible si su fecha es >= al lunes de la semana activa
+      // (así no desaparece en semanas futuras)
+      return t.date>=wStartISO||taskOccursInWeek(t, wStart);
+    });
   },[assigns,tasks,bMems,boardId,wStart]);
 
   const trashTasks=useCallback(()=>{
@@ -505,21 +518,48 @@ export default function App() {
   const tAss=useCallback(tid=>{const ids=assigns.filter(a=>a.task_id===tid).map(a=>a.member_id);return members.filter(m=>ids.includes(m.id));},[assigns,members]);
 
   const getMSch=(task,mid)=>{
-    if(!task.assignee_schedules||task.assignee_schedules.length===0) return {date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""};
+    if(!task.assignee_schedules||task.assignee_schedules.length===0) return {date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:task.endHour||HOURS[HOURS.length-1]};
     const memberSchedule=task.assignee_schedules.find(s=>s.memberId===mid);
-    if(memberSchedule) return {date:memberSchedule.date||task.date,hour:memberSchedule.hour||task.hour||HOURS[0],endDate:memberSchedule.endDate||task.end_date||"",endHour:memberSchedule.endHour||""};
-    return {date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""};
+    if(memberSchedule) return {date:memberSchedule.date||task.date,hour:memberSchedule.hour||task.hour||HOURS[0],endDate:memberSchedule.endDate||task.end_date||"",endHour:memberSchedule.endHour||HOURS[HOURS.length-1]};
+    return {date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:HOURS[HOURS.length-1]};
   };
   const cOf=id=>clients.find(c=>c.id===id);
 
   const addTask=async(f,mid,date,hour)=>{
     const id=uid();
     const allA=[...new Set([...(mid?[mid]:[]),...(f.assignees||[])])];
-    const scheds=allA.map(m=>{const s=(f.schedules||[]).find(s=>s.memberId===m);return{memberId:m,date:s?.date||date||"",hour:s?.hour||hour||HOURS[0],endDate:s?.endDate||"",endHour:s?.endHour||""};});
-    // end_date: usar el que viene en f (ya resuelto por saveModal), o derivar del schedule
+    // FIX: endHour siempre con fallback explícito al crear schedules
+    const scheds=allA.map(m=>{
+      const s=(f.schedules||[]).find(s=>s.memberId===m);
+      return{
+        memberId:m,
+        date:s?.date||date||"",
+        hour:s?.hour||hour||HOURS[0],
+        endDate:s?.endDate||"",
+        endHour:s?.endHour||HOURS[HOURS.length-1],
+      };
+    });
     const resolvedEndDate = f.end_date||scheds[0]?.endDate||null;
     const resolvedDate = scheds[0]?.date||date||null;
-    const taskData={id,board_id:boardId,member_id:allA[0]||null,title:f.title||"Sin título",status:f.status||"pendiente",link:f.link||"",comments:f.comments||"",client_id:f.client_id||"",color:f.color||"#FFFFFF",duration:f.duration||1,reference_links:f.refs||[],assignee_schedules:scheds,date:resolvedDate,hour:scheds[0]?.hour||hour||HOURS[0],is_recurring:f.is_recurring||false,recurrence_days:f.rec_days||[],end_date:resolvedEndDate||null};
+    const taskData={
+      id,
+      board_id:boardId,
+      member_id:allA[0]||null,
+      title:f.title||"Sin título",
+      status:f.status||"pendiente",
+      link:f.link||"",
+      comments:f.comments||"",
+      client_id:f.client_id||"",
+      color:f.color||"#FFFFFF",
+      duration:f.duration||1,
+      reference_links:f.refs||[],
+      assignee_schedules:scheds,
+      date:resolvedDate,
+      hour:scheds[0]?.hour||hour||HOURS[0],
+      is_recurring:f.is_recurring||false,
+      recurrence_days:f.rec_days||[],
+      end_date:resolvedEndDate||null,
+    };
     await supabase.from("tasks").insert(taskData);
     if(allA.length>0)await supabase.from("task_assignments").insert(allA.map(m=>({id:uid(),task_id:id,member_id:m})));
     saveToHistory('CREATE_TASK',{id,task:taskData});
@@ -527,7 +567,21 @@ export default function App() {
 
   const quickAdd=async()=>{
     if(!quick.trim())return;
-    await supabase.from("tasks").insert({id:uid(),board_id:boardId,title:quick.trim(),status:"pendiente",color:"#E8623A",duration:1,reference_links:[],assignee_schedules:[],is_recurring:false,recurrence_days:[]});
+    // FIX: quickAdd ahora incluye board_id para que aparezca en el sidebar correcto
+    await supabase.from("tasks").insert({
+      id:uid(),
+      board_id:boardId,
+      title:quick.trim(),
+      status:"pendiente",
+      color:"#E8623A",
+      duration:1,
+      reference_links:[],
+      assignee_schedules:[],
+      is_recurring:false,
+      recurrence_days:[],
+      date:null,
+      end_date:null,
+    });
     setQuick("");
   };
 
@@ -535,7 +589,10 @@ export default function App() {
     const{assignees,schedules,...rest}=patch;
     const fm={title:"title",status:"status",link:"link",date:"date",hour:"hour",end_date:"end_date",comments:"comments",client_id:"client_id",color:"color",duration:"duration",reference_links:"reference_links",memberId:"member_id",is_recurring:"is_recurring",recurrence_days:"recurrence_days"};
     const db={};Object.keys(rest).forEach(k=>{if(fm[k])db[fm[k]]=rest[k];});
-    if(schedules){db.assignee_schedules=schedules;if(schedules[0]?.date){db.date=schedules[0].date;db.hour=schedules[0].hour||HOURS[0];}}
+    if(schedules){
+      db.assignee_schedules=schedules;
+      if(schedules[0]?.date){db.date=schedules[0].date;db.hour=schedules[0].hour||HOURS[0];}
+    }
     if(Object.keys(db).length>0)await supabase.from("tasks").update(db).eq("id",id);
     if(assignees!==undefined){await supabase.from("task_assignments").delete().eq("task_id",id);if(assignees.length>0)await supabase.from("task_assignments").insert(assignees.map(m=>({id:uid(),task_id:id,member_id:m})));}
   };
@@ -548,7 +605,10 @@ export default function App() {
     const{id:_,created_at,...rest}=task;
     const id=uid();
     const newAssignees=targetMemberId?[targetMemberId]:aids;
-    const newSchedules=targetMemberId?[{memberId:targetMemberId,date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:""}]:task.assignee_schedules;
+    // FIX: endHour con fallback al duplicar
+    const newSchedules=targetMemberId
+      ?[{memberId:targetMemberId,date:task.date,hour:task.hour||HOURS[0],endDate:task.end_date||"",endHour:HOURS[HOURS.length-1]}]
+      :(task.assignee_schedules||[]).map(s=>({...s,endHour:s.endHour||HOURS[HOURS.length-1]}));
     await supabase.from("tasks").insert({...rest,id,title:targetMemberId?task.title:`${task.title} (copia)`,member_id:newAssignees[0]||null,assignee_schedules:newSchedules});
     if(newAssignees.length>0) await supabase.from("task_assignments").insert(newAssignees.map(m=>({id:uid(),task_id:id,member_id:m})));
     setModal(null);
@@ -566,29 +626,69 @@ export default function App() {
   const openAdd=(mid,date,hour)=>{
     const d=date||"";const h=hour||HOURS[0];
     setModal({mode:"add",mid,date:d,hour:h});
-    setForm({...EMPTY,assignees:mid?[mid]:[],schedules:mid?[{memberId:mid,date:d,hour:h,endDate:"",endHour:HOURS[HOURS.length-1]}]:[],date:d,hour:h});
+    // FIX: endHour explícito al abrir modal de nueva tarea
+    setForm({
+      ...EMPTY,
+      assignees:mid?[mid]:[],
+      schedules:mid?[{memberId:mid,date:d,hour:h,endDate:"",endHour:HOURS[HOURS.length-1]}]:[],
+      date:d,
+      hour:h,
+      endHour:HOURS[HOURS.length-1],
+    });
   };
 
   const openEdit=task=>{
     const aids=assigns.filter(a=>a.task_id===task.id).map(a=>a.member_id);
-    const scheds=aids.map(m=>{const s=(task.assignee_schedules||[]).find(s=>s.memberId===m);return{memberId:m,date:s?.date||task.date||"",hour:s?.hour||task.hour||HOURS[0],endDate:s?.endDate||task.end_date||"",endHour:s?.endHour||HOURS[HOURS.length-1]};});
+    // FIX: endHour siempre con fallback al editar
+    const scheds=aids.map(m=>{
+      const s=(task.assignee_schedules||[]).find(s=>s.memberId===m);
+      return{
+        memberId:m,
+        date:s?.date||task.date||"",
+        hour:s?.hour||task.hour||HOURS[0],
+        endDate:s?.endDate||task.end_date||"",
+        endHour:s?.endHour||HOURS[HOURS.length-1],
+      };
+    });
     setModal({mode:"edit",task});
-    setForm({title:task.title,link:task.link||"",status:task.status||"pendiente",comments:task.comments||"",client_id:task.client_id||"",color:task.color||"#FFFFFF",duration:task.duration||1,assignees:aids,schedules:scheds,refs:task.reference_links||[],date:scheds[0]?.date||task.date||"",hour:scheds[0]?.hour||task.hour||HOURS[0],end_date:task.end_date||"",is_recurring:task.is_recurring||false,rec_days:task.recurrence_days||[],_rangeMode:!!(task.end_date)});
+    setForm({
+      title:task.title,
+      link:task.link||"",
+      status:task.status||"pendiente",
+      comments:task.comments||"",
+      client_id:task.client_id||"",
+      color:task.color||"#FFFFFF",
+      duration:task.duration||1,
+      assignees:aids,
+      schedules:scheds,
+      refs:task.reference_links||[],
+      date:scheds[0]?.date||task.date||"",
+      hour:scheds[0]?.hour||task.hour||HOURS[0],
+      end_date:task.end_date||"",
+      endHour:scheds[0]?.endHour||HOURS[HOURS.length-1],
+      is_recurring:task.is_recurring||false,
+      rec_days:task.recurrence_days||[],
+      _rangeMode:!!(task.end_date),
+    });
   };
 
   const saveModal=async()=>{
     if(!form.title.trim())return;
-    const scheds=form.schedules.map(s=>({memberId:s.memberId,date:s.date||form.date||null,hour:s.hour||form.hour||HOURS[0],endDate:s.endDate||null,endHour:s.endHour||null}));
+    // FIX: endHour siempre con fallback al guardar, nunca null si había valor
+    const scheds=form.schedules.map(s=>({
+      memberId:s.memberId,
+      date:s.date||form.date||null,
+      hour:s.hour||form.hour||HOURS[0],
+      endDate:s.endDate||null,
+      endHour:s.endHour||form.endHour||HOURS[HOURS.length-1],
+    }));
 
-    // Derivar end_date: si hay schedules en modo rango, usar el endDate más tardío entre todos los schedules
-    // Si no hay schedules (sin asignados), usar form.end_date directamente
     let resolvedEndDate = form.end_date||null;
     if(form._rangeMode && scheds.length>0){
       const endDates = scheds.map(s=>s.endDate).filter(Boolean);
       if(endDates.length>0) resolvedEndDate = endDates.sort().reverse()[0];
     }
 
-    // Derivar date: el startDate más temprano de los schedules
     let resolvedDate = form.date||null;
     if(scheds.length>0){
       const startDates = scheds.map(s=>s.date).filter(Boolean);
@@ -607,7 +707,23 @@ export default function App() {
         await addTask({...form,end_date:resolvedEndDate,date:resolvedDate,schedules:scheds},modal.mid,resolvedDate,form.hour);
       }
     } else {
-      await updateTask(modal.task.id,{title:form.title,link:form.link,status:form.status,comments:form.comments,client_id:form.client_id,color:form.color,duration:form.duration,reference_links:form.refs,assignees:form.assignees,schedules:scheds,date:form.is_recurring?null:resolvedDate,hour:scheds[0]?.hour||form.hour||HOURS[0],end_date:form.is_recurring?null:resolvedEndDate,is_recurring:form.is_recurring,recurrence_days:form.rec_days});
+      await updateTask(modal.task.id,{
+        title:form.title,
+        link:form.link,
+        status:form.status,
+        comments:form.comments,
+        client_id:form.client_id,
+        color:form.color,
+        duration:form.duration,
+        reference_links:form.refs,
+        assignees:form.assignees,
+        schedules:scheds,
+        date:form.is_recurring?null:resolvedDate,
+        hour:scheds[0]?.hour||form.hour||HOURS[0],
+        end_date:form.is_recurring?null:resolvedEndDate,
+        is_recurring:form.is_recurring,
+        recurrence_days:form.rec_days,
+      });
     }
     setModal(null);
   };
@@ -619,7 +735,11 @@ export default function App() {
     const aids=assigns.filter(a=>a.task_id===t.id).map(a=>a.member_id);
     const bMids=bMems.map(m=>m.id);const cross=aids.filter(id=>!bMids.includes(id));
     const newA=[...cross,mid];
-    const newS=newA.map(m=>{if(m===mid)return{memberId:mid,date,hour};const f=(t.assignee_schedules||[]).find(s=>s.memberId===m&&s.date);return f||{memberId:m,date:t.date,hour:t.hour||HOURS[0]};});
+    const newS=newA.map(m=>{
+      if(m===mid)return{memberId:mid,date,hour,endDate:"",endHour:HOURS[HOURS.length-1]};
+      const f=(t.assignee_schedules||[]).find(s=>s.memberId===m&&s.date);
+      return f||{memberId:m,date:t.date,hour:t.hour||HOURS[0],endDate:"",endHour:HOURS[HOURS.length-1]};
+    });
     await updateTask(t.id,{date,hour,memberId:mid,assignees:newA,schedules:newS,status:"asignada"});
     dragRef.current=null;
   };
@@ -636,9 +756,8 @@ export default function App() {
     </div>
   );
 
-  // ── Componente sidebar de tareas ──────────────────────────────────────────
+  // ── Sidebar de tareas ────────────────────────────────────────────────────
   const SideTasks=()=>{
-    // ── Papelera ────────────────────────────────────────────────────────────
     if(showTrash){
       const trash=trashTasks();
       const getDaysLeft=t=>{
@@ -674,7 +793,7 @@ export default function App() {
       );
     }
 
-    // ── Buscador: resultados globales ────────────────────────────────────────
+    // ── Buscador global ──────────────────────────────────────────────────────
     if(searchQuery.trim()){
       const q=searchQuery.toLowerCase();
       const allNonDeleted=tasks.filter(t=>!t.deleted_at&&t.title.toLowerCase().includes(q));
@@ -709,26 +828,30 @@ export default function App() {
       );
     }
 
-    // ── Vista normal: tareas de la semana activa ─────────────────────────────
+    // ── Vista normal ─────────────────────────────────────────────────────────
     const all=sTasks();
     let fil=fClient?all.filter(t=>t.client_id===fClient):all;
     if(sidebarMemberFilter) fil=fil.filter(t=>{const ass=assigns.filter(a=>a.task_id===t.id).map(a=>a.member_id);return ass.includes(sidebarMemberFilter);});
 
-    // Separar terminadas del resto
     const nonTerminadas=fil.filter(t=>t.status!=="terminada");
     const terminadas=fil.filter(t=>t.status==="terminada");
 
-    // Agrupar terminadas por semana (lunes de la semana de su fecha)
+    // Agrupar terminadas por semana
     const terminadasPorSemana={};
     terminadas.forEach(t=>{
       const d=fromISO(t.date);
-      if(!d)return;
+      if(!d){
+        // FIX: terminadas sin fecha → agrupar en semana activa
+        const key=toISO(wStart);
+        if(!terminadasPorSemana[key])terminadasPorSemana[key]={monday:wStart,tasks:[]};
+        terminadasPorSemana[key].tasks.push(t);
+        return;
+      }
       const lunes=getMonday(d);
       const key=toISO(lunes);
       if(!terminadasPorSemana[key])terminadasPorSemana[key]={monday:lunes,tasks:[]};
       terminadasPorSemana[key].tasks.push(t);
     });
-    // Ordenar semanas más reciente primero
     const semanasSorted=Object.entries(terminadasPorSemana).sort((a,b)=>b[0].localeCompare(a[0]));
     const currentWeekKey=toISO(wStart);
 
@@ -795,8 +918,8 @@ export default function App() {
           );
         })}
 
-        {/* ── Terminadas agrupadas por semana ─────────────────────────────── */}
-        {(terminadas.length>0||semanasSorted.length>0)&&(
+        {/* Terminadas agrupadas por semana */}
+        {terminadas.length>0&&(
           <div style={{marginBottom:6}}>
             <div style={{display:"flex",alignItems:"center",gap:8,background:STATUSES.find(s=>s.value==="terminada").bg,border:`1px solid ${STATUSES.find(s=>s.value==="terminada").color}33`,padding:"8px 10px",borderRadius:8,marginBottom:4}}>
               <span style={{fontSize:11,fontWeight:700,color:STATUSES.find(s=>s.value==="terminada").color,textTransform:"uppercase",letterSpacing:1,flex:1}}>Terminada</span>
@@ -809,7 +932,7 @@ export default function App() {
                 <div key={key} style={{marginLeft:8,marginBottom:4}}>
                   <button
                     onClick={()=>setCollapsedWeeks(p=>({...p,[key]:!isCollapsed}))}
-                    style={{display:"flex",alignItems:"center",gap:5,background:"none",border:"none",cursor:"pointer",width:"100%",padding:"4px 6px",borderRadius:6,background:isCurrentWeek?"#2a2a2a":"transparent"}}>
+                    style={{display:"flex",alignItems:"center",gap:5,background:isCurrentWeek?"#2a2a2a":"transparent",border:"none",cursor:"pointer",width:"100%",padding:"4px 6px",borderRadius:6}}>
                     <span style={{fontSize:10,color:isCurrentWeek?"#D4E157":"#555",fontWeight:isCurrentWeek?600:400,flex:1,textAlign:"left"}}>
                       {isCurrentWeek?"Esta semana · ":""}{weekLabel(monday)}
                     </span>
@@ -888,7 +1011,7 @@ export default function App() {
               ))}
             </div>
           </div>
-          {/* ── Buscador ─────────────────────────────────────────────────── */}
+          {/* Buscador */}
           <div style={{padding:"0.5rem 1rem",borderBottom:"1px solid #2a2a2a"}}>
             <div style={{display:"flex",alignItems:"center",gap:6,background:"#2a2a2a",borderRadius:8,padding:"5px 10px"}}>
               <span style={{fontSize:13,color:"#555"}}>🔍</span>
@@ -1068,7 +1191,6 @@ export default function App() {
                     {DAYS_S.map(d=><div key={d} style={{textAlign:"center",fontSize:9,letterSpacing:2,color:"#bbb",textTransform:"uppercase",padding:"4px 0"}}>{d}</div>)}
                   </div>
                   {weeks.map((week,wi)=>{
-                    // Al hacer clic en una semana del mes → navegar a esa semana en vista semanal
                     const firstDay=week.find(d=>d!==null);
                     const weekMonday=firstDay?getMonday(new Date(cYear,cMonth,firstDay)):null;
                     return(
@@ -1084,7 +1206,6 @@ export default function App() {
                               onDragOver={e=>{if(day)e.preventDefault();}}
                               onDrop={e=>{if(iso)onDrop(e,bMems[0]?.id,iso,"8:00 AM");}}
                               onDoubleClick={()=>{
-                                // Doble clic en día del mes → ir a esa semana
                                 if(weekMonday){setWS(weekMonday);setView("weekly");}
                               }}
                               style={{background:day?(hol?"#FFF5F5":"#fff"):"transparent",border:isT?`2px solid ${board.accent}`:day?"1px solid #E8E4DE":"none",borderRadius:10,minHeight:100,padding:5,cursor:day?"pointer":"default"}}>
