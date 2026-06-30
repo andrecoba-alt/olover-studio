@@ -689,22 +689,27 @@ export default function App() {
       if(endDates.length>0) resolvedEndDate = endDates.sort().reverse()[0];
     }
 
-    let resolvedDate = form.date||null;
-    if(scheds.length>0){
-      const startDates = scheds.map(s=>s.date).filter(Boolean);
-      if(startDates.length>0) resolvedDate = startDates.sort()[0];
-    }
+    // FIX: la fecha de la tarea SIEMPRE prioriza form.date (lo que el usuario
+    // realmente seleccionó en el campo "Fecha inicio"). Antes se recalculaba
+    // con sort() sobre todas las fechas de los schedules, lo que podía mover
+    // la tarea a un día distinto al elegido si algún schedule tenía una
+    // fecha inconsistente (ej: heredada de una edición previa).
+    let resolvedDate = form.date || scheds[0]?.date || null;
 
     if(modal.mode==="add"){
       if(form.assignees.length>1){
         for(const assigneeId of form.assignees){
           const assigneeSchedule=scheds.find(s=>s.memberId===assigneeId)||scheds[0];
-          const aDate=assigneeSchedule?.date||resolvedDate;
+          // FIX: la fecha de cada assignee también prioriza form.date, no la
+          // del schedule individual, para que todos queden en el mismo día
+          // que el usuario seleccionó (a menos que explícitamente la haya
+          // cambiado en su fila del modal).
+          const aDate=resolvedDate;
           const aEndDate=form._rangeMode?(assigneeSchedule?.endDate||resolvedEndDate):null;
-          await addTask({...form,end_date:aEndDate,assignees:[assigneeId],schedules:[assigneeSchedule]},assigneeId,aDate,form.hour);
+          await addTask({...form,end_date:aEndDate,assignees:[assigneeId],schedules:[{...assigneeSchedule,date:aDate}]},assigneeId,aDate,form.hour);
         }
       } else {
-        await addTask({...form,end_date:resolvedEndDate,date:resolvedDate,schedules:scheds},modal.mid,resolvedDate,form.hour);
+        await addTask({...form,end_date:resolvedEndDate,date:resolvedDate,schedules:scheds.map(s=>({...s,date:resolvedDate}))},modal.mid,resolvedDate,form.hour);
       }
     } else {
       await updateTask(modal.task.id,{
@@ -717,7 +722,7 @@ export default function App() {
         duration:form.duration,
         reference_links:form.refs,
         assignees:form.assignees,
-        schedules:scheds,
+        schedules:scheds.map(s=>({...s,date:s.date||resolvedDate})),
         date:form.is_recurring?null:resolvedDate,
         hour:scheds[0]?.hour||form.hour||HOURS[0],
         end_date:form.is_recurring?null:resolvedEndDate,
