@@ -43,6 +43,24 @@ const taskOccursOn = (task, iso) => {
   return task.date===iso;
 };
 
+// FIX: versión por-persona. Cuando una tarea está compartida entre varios
+// miembros, cada uno puede tener su propia fecha en assignee_schedules.
+// La grilla semanal de CADA persona debe filtrar usando SU fecha individual,
+// no el campo `date` global de la tarea (que solo refleja al primer asignado).
+// Sin esto, todas las personas asignadas ven el bloque en la misma columna
+// de día sin importar lo que hayan puesto en "Horario por persona".
+const taskOccursOnForMember = (task, iso, memberId) => {
+  if (!iso) return false;
+  if (task.is_recurring && (task.recurrence_days||[]).length>0) {
+    const d=fromISO(iso); return d&&task.recurrence_days.includes(REC_DAYS[d.getDay()]);
+  }
+  const sch = (task.assignee_schedules||[]).find(s=>s.memberId===memberId);
+  const date = sch?.date || task.date;
+  const endDate = sch?.endDate || task.end_date;
+  if (endDate&&date) return iso>=date&&iso<=endDate;
+  return date===iso;
+};
+
 const taskOccursInWeek = (task, monday) => {
   for (let i = 0; i < 5; i++) {
     const iso = toISO(addDays(monday, i));
@@ -1108,7 +1126,7 @@ export default function App() {
             <div style={{flex:1,overflowY:"auto",padding:"1rem"}}>
               {bMems.filter(m=>!mFilter||m.id===mFilter).map(m=>{
                 const mt=mTasks(m.id).filter(t=>fClient?t.client_id===fClient:true);
-                const wc=mt.filter(t=>wDates.some(d=>taskOccursOn(t,toISO(d)))).length;
+                const wc=mt.filter(t=>wDates.some(d=>taskOccursOnForMember(t,toISO(d),m.id))).length;
                 return(
                   <div key={m.id} style={{marginBottom:"1.5rem"}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"0 4px"}}>
@@ -1136,7 +1154,7 @@ export default function App() {
                             const isLunchHour=m.lunch_start&&m.lunch_end&&hour>=m.lunch_start&&hour<m.lunch_end;
                             const tasksToRender=[];
                             mt.forEach(t=>{
-                              if(!taskOccursOn(t,iso))return;
+                              if(!taskOccursOnForMember(t,iso,m.id))return;
                               if(t.end_date){
                                 const sch=getMSch(t,m.id);
                                 if(sch&&sch.date&&sch.endDate&&sch.endHour){
